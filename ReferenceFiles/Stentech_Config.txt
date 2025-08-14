@@ -1,0 +1,9 @@
+C:\\Masterlibs\\
+C:\\Working\\
+C:\\FRAMES169\\
+%USERPROFILE%\\Documents\\temp\\VCAM_STENCILS\\
+%USERPROFILE%\\Documents\\temp\\NoNET
+Tahoma
+Stroke-Stencil
+Stroke-Stencil
+

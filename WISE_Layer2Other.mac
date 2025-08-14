@@ -1,0 +1,11 @@
+MACRO Layer2Other
+	#This macro was writeen for MET Associates to turn a given layer's type to other
+	GETVALUE "Which layer would you like to convert to type Other? 0 to Stop", $layer
+	REPEAT $layer > 0
+		LAYERN $layer
+			TYPE $$LTOTHER
+		END
+		GETVALUE "Which layer would you like to convert to type Other? 0 to Stop", $layer
+	END
+
+ENDMACRO

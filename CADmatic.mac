@@ -1,0 +1,139 @@
+MACRO LoadFiles
+	# Macro LoadFiles Written by Robbie Devennie on 2024-09-06
+	# Loads the files from the CADmatic folder into the current project
+	# This is necessary to use the CADmatic functions
+	# Read file list from C:\\CADmatic\\Files.cmt
+	StrSet $fileListPath, "C:\\CADmatic\\Files.cmt"
+	StrSet $filePath, ""
+	FileOpen $fid, $fileListPath, "r"
+	If $$STATUS != 0
+		Set $layer = 1
+		Repeat $$STATUS > 0
+			FileRead $fid, "", $filePath
+			If $$STATUS > 0
+				GetFreeLayer $layer
+				ImportGerber $filePath, $layer
+			End
+		End
+		If $gCADmatic
+			Pause 5, "CADmatic - Waiting for Power Automate to recognise window. Please wait for it to finish."
+		End
+		MessageBox "CADmatic", "Files loaded", 0
+	Else
+		StrWrite $log, "Failed to read file list at\r\r%s", $fileListPath
+		LogMessage 0, $log
+		Stop $log
+	End
+ENDMACRO
+
+MACRO _CADmaticPrintReports
+	# Macro _CADmaticPrintReports Written by Robbie Devennie on 2024-06-10
+	StrWrite $log, "_CADmaticPrintReports Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $printInColor = $$NO
+	SelectViewTab "Main"
+
+	CALLMACRO _CheckCombo, $gComboYesNo # Check If design is a combo stencil
+
+	StrSet $gPrinterChoice, "CheckPlot"
+	CALLMACRO _PrintCheckPlot, $printInColor
+
+	StrSet $gPrinterChoice, "SizePlot"
+	CALLMACRO _PrintSizePlot, $gSizePlotT
+
+	IsEmptyLayer $gSizePlotB
+	If $$STATUS == $$FALSE
+		StrSet $gPrinterChoice, "SizePlotBot"
+		CALLMACRO _PrintSizePlot, $gSizePlotB
+	End
+	# Todo: Add combo check.
+	If $gComboYesNo == $$YES
+		StrSet $gPrinterChoice, "ApertureReport"
+		CALLMACRO _PrintPasteReport, $printInColor, 3
+	Else
+		StrSet $gPrinterChoice, "ApertureReport"
+		CALLMACRO _PrintPasteReport, $printInColor, 1
+		IsEmptyLayer $gCutB
+		If $$STATUS == $$FALSE
+			StrSet $gPrinterChoice, "ApertureReportBot"
+			CALLMACRO _PrintPasteReport, $printInColor, 2
+		End
+	End
+
+	If $gCADmatic
+		# Skip
+	Else
+		StrSet $gPrinterChoice, "FilledMylar"
+		CALLMACRO _PrintFilledMylar, $gModPasteT
+		StrSet $gPrinterChoice, "OutlinedMylar"
+		CALLMACRO _PrintOutlinedMylar, $gModPasteT
+		IsEmptyLayer $gModPasteB
+		If $$STATUS == $$FALSE
+			StrSet $gPrinterChoice, "FilledMylarBot"
+			CALLMACRO _PrintFilledMylar, $gModPasteB
+			StrSet $gPrinterChoice, "OutlinedMylarBot"
+			CALLMACRO _PrintOutlinedMylar, $gModPasteB
+		End
+
+	End
+
+	MessageBox "CADmatic", "Check plots copied to working directory", 0
+
+	# Get the app data path
+	GetAppDataFolder $appDataPath
+	StrWrite $bat, "%s\\macros\\ReferenceFiles\\CopyCheckPlotsToWorkingDirectory.bat", $appDataPath
+	# Copy the default save path to the clipboard
+	SplitPath $$DSNNAME, $dir, $filename, $ext
+	StrWrite $workingDir, "%s\\CheckPlots", $dir
+	StrWrite $cmd, "%s %s", $bat, $workingDir
+	SysCmd $cmd
+	# save the working directory to a text file
+	StrWrite $workingDirFile, "C:\\CADmatic\\WorkingDirectory.txt"
+	FileOpen $fid, $workingDirFile, "w"
+	FileWrite $fid, $dir
+	FileClose $fid
+
+	ActiveLayer $gCheckPlotT
+ENDMACRO
+
+MACRO _CopyCustomerData
+	# Macro _CopyCustomerData Written by Robbie Devennie on 2024-10-18
+	StrWrite $log, "_CopyCustomerData Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Get the app data path
+	GetAppDataFolder $appDataPath
+	StrWrite $bat, "%s\\macros\\ReferenceFiles\\CopyCustomerData.bat", $appDataPath
+	# Copy the default save path to the clipboard
+	SplitPath $$DSNNAME, $dir, $filename, $ext
+	StrWrite $customerDataDir, "C:\\CADmatic\\Files.cmt"
+	StrWrite $workingDir, "%s\\CustomerData", $dir
+	StrWrite $cmd, "%s \"%s\" \"%s\"", $bat, $customerDataDir, $workingDir
+	SysCmd $cmd
+ENDMACRO
+
+
+MACRO _SendToDatto
+	# Macro _SendToDatto Written by Robbie Devennie on 2024-10-18
+	StrWrite $log, "_SendToDatto Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	If $$CALLDEPTH > 0
+		StrSet $CADGroup, $1
+	Else
+		StrSet $CADGroup, "BRS"
+	End
+	# Get the app data path
+	GetAppDataFolder $appDataPath
+	# Send to Datto
+	StrCmp $CADGroup, "ITAR"
+	If $$STATUS == 0
+		StrSet $category, "ITAR"
+	Else
+		StrSet $category, "NonITAR"
+	End
+	StrWrite $bat, "%s\\macros\\ReferenceFiles\\SendToDatto.bat", $appDataPath
+	StrWrite $cmd, "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"", $bat, "M", $$DSNNAME, $category, $CADGroup, $gCustomer, $gOp
+	StrWrite $log, "CMD: %s", $cmd
+	LogMessage 0, $log
+	SysCmd $cmd
+ENDMACRO

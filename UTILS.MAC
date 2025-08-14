@@ -1,0 +1,273 @@
+MACRO lyrvis
+
+# This macro prompts the user for a list of layers to change the
+# visibility of. Negative layer values indicate a layer should
+# be turned OFF, positive values indicate ON.
+
+	GetString "Enter layer list", $lyrlist
+
+	StrTok $slyr, ",", $lyrlist
+
+	REPEAT $$STATUS > 0
+
+		StrRead $slyr, "%n", $lyr		# convert string into a numeric value
+
+		IF $lyr < 0
+			Calc $mode = 0					# OFF
+			Calc $lyr = 0 - $lyr			# invert
+		ELSE
+			Calc $mode = 1					# ON
+		END
+
+		CallMacro "IsValidLayer", $lyr
+
+		IF $$STATUS
+			LAYERN $lyr
+				Visibility $mode
+			END
+		ELSE
+			StrWrite $msg, "invalid layer: %.0n", $lyr
+			MessageBox "Problem!", $msg, 0
+		END
+
+		StrTok $slyr, ",", 0
+
+	END
+
+	Redraw
+
+ENDMACRO
+
+
+MACRO IsValidLayer
+
+# $1 is layer to check
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	Calc $$STATUS = $$FALSE
+
+	IF $1 > 0
+		IF $1 <= $$MAXLAYERS
+			Calc $$STATUS = $$TRUE
+		END
+	END
+
+ENDMACRO
+
+
+MACRO IsLayerVis
+
+# $1 is layer to check
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	GetLayer	$1, $fn, $ln, $ap, $vis, $fc, $dc, $type, $pol, $key, $ftype,\
+				$lx, $ly, $ux, $uy, $netid
+
+	Calc $$STATUS = $vis
+ENDMACRO
+
+
+MACRO MaxLoadedLayer
+
+# returns max loaded layer in $1
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	Set $1 = $$MAXLAYERS + 1
+	Calc $$STATUS = $$FALSE
+
+	IF $$VERSION < 9 
+		REPEAT $$STATUS == $$FALSE
+
+			Calc $1 = $1 - 1
+			ActiveLayer $1
+
+		END
+	ELSE
+
+		Set $bOkMore = $$TRUE
+
+		REPEAT $bOkMore
+
+			Calc $1 = $1 - 1
+
+			GetLayer	$1, $fn, $ln, $ap, $vis, $fc, $dc, $type, $pol, $key, $bHasData,\
+						$lx, $ly, $ux, $uy, $netid
+
+			IF $$STATUS
+
+				IF $bHasData
+
+					Strlen $ln	# returns length in $$STATUS
+
+					IF $$STATUS
+						Calc $bOkMore = $$FALSE
+					END
+
+				END
+
+			ELSE
+				$bOkMore = $$FALSE				
+			END
+
+		END
+
+	END
+
+ENDMACRO
+
+
+MACRO MaxLoadedAp
+
+# $1 is layer to check
+# returns max loaded aperture in $2
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+#	Set $2 = 4000
+	Set $2 = 999		# lowered to speed up...
+
+	REPEAT $$STATUS == $$FALSE
+
+		Calc $2 = $2 - 1
+
+		GetApInfo $1, $2, $shp, $xs, $ys, $type, $tool, $toolsize, $legend
+
+	END
+
+ENDMACRO
+
+
+MACRO _ApNoToShape
+
+# $1 is shape to convert
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	IF $1 == $$ROUND
+		StrCpy $2, "Round"
+	ELSE
+		IF $1 == $$SQUARE
+			StrCpy $2, "Square"
+		ELSE
+			IF $1 == $$RECTANGLE
+				StrCpy $2, "Rectangle"
+			ELSE
+				IF $1 == $$OBLONG
+					StrCpy $2, "Oblong"
+				ELSE
+					IF $1 == $$OCTAGON
+						StrCpy $2, "Octagon"
+					ELSE
+						IF $1 == $$THERMAL
+							StrCpy $2, "Thermal"
+						ELSE
+							IF $1 == $$THERMAL45
+								StrCpy $2, "Thermal45"
+							ELSE
+								IF $1 == $$TARGET
+									StrCpy $2, "Target"
+								ELSE
+									IF $1 == $$DONUT
+										StrCpy $2, "Donut"
+									ELSE
+										IF $1 == $$DIAMOND
+											StrCpy $2, "Diamond"
+										ELSE
+											IF $1 == $$CUSTOM
+												StrCpy $2, "Custom"
+											END
+										END
+									END
+								END
+							END
+						END
+					END
+				END
+			END
+		END
+	END
+ENDMACRO
+
+
+MACRO _ApShapeToNo
+
+# $1 is shape to convert
+# returns shape number in $2
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	StrSub $shp, 1, 2, $1
+	StrCmp $shp, "Ro"
+
+	IF $$STATUS == 0
+		Calc $2 = $$ROUND
+	ELSE
+	 	StrCmp $shp, "Sq"
+		IF $$STATUS == 0
+			Calc $2 = $$SQUARE
+		ELSE
+			StrCmp $shp, "Re"
+			IF $$STATUS == 0
+				Calc $2 = $$RECTANGLE
+			ELSE
+				StrCmp $shp, "Ob"
+				IF $$STATUS == 0
+					Calc $2 = $$OBLONG
+				ELSE
+					StrCmp $shp, "Oc"
+					IF $$STATUS == 0
+						Calc $2 = $$OCTAGON
+					ELSE
+						StrCmp $shp, "TH"
+						IF $$STATUS == 0
+							StrLoc $1, "45"
+							IF $$STATUS > 0
+								Calc $2 = $$THERMAL45
+							ELSE
+								Calc $2 = $$THERMAL
+							END
+						ELSE
+							StrCmp $shp, "Ta"
+							IF $$STATUS == 0
+								Calc $2 = $$TARGET
+							ELSE
+								StrCmp $shp, "Do"
+								IF $$STATUS == 0
+									Calc $2 = $$DONUT
+								ELSE
+									StrCmp $shp, "Di"
+									IF $$STATUS == 0
+										Calc $2 = $$DIAMOND
+									ELSE
+										StrCmp $shp, "Cu"
+										IF $$STATUS == 0
+											Calc $2 = $$CUSTOM
+										ELSE
+											Calc $2 = $$ROUND
+										END
+									END
+								END
+							END
+						END
+					END
+				END
+			END
+		END
+	END
+ENDMACRO
+

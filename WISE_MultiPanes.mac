@@ -1,0 +1,261 @@
+MACRO MultiPanes
+
+	# This macro was designed to assist in the automatic conversion of smt pad shapes for stencil design purposes.
+	# It is intenede to convert any Data contained within the windowed area.
+	# MACRO _GetFirstBlankDcode written by John Dingley, JD Photo-Tool
+	# Current Version Written by Stan Keightley, WISE Software Solutions, Copyright 2007
+
+	SET	$TEMP1 = 0
+	SET	$TEMP2 = 0
+	SET	$$STATUS = 0
+	SET	$slayer = 0
+	SET	$tlayer = 0
+	SET	$Repeat = $$YES
+	REPEAT	$$STATUS == 0
+
+		GetValue   	"Enter Input Layer:", $layer
+		ActiveLayer	$layer
+
+	END
+	CALLMACRO	_GetFirstEmptyLayer , $slayer
+
+	CALLMACRO	_GetSecondEmptyLayer , $tlayer
+
+	REPEAT $Repeat == $$YES
+		ActiveLayer	$layer
+		GETWINDOW "Window around pad to be converted:" , $winX1, $winY1, $winX2, $winY2
+		SELECTGROUP
+			MODE	0
+			GO
+		END
+		SELECTGROUP
+
+			MODE	1
+			By		$$WINDOWMODE
+			Boundary	$$NO
+			Flashes	$$TRUE
+			Draws		$$TRUE
+			Arcs		$$TRUE
+			Polys		$$TRUE
+			DCODE	0
+			Layer		$layer
+			GO  		$winX1, $winY1, $winX2, $winY2
+
+		END
+
+		IF $$SELGRPCNT > 0
+
+			COPY
+				By		$$GROUPMODE
+				Tolayer	$slayer
+				GO		0,0,0,0
+			END
+
+			GetValue	"Enter gap size:", $routeamt
+			GetValue	"Enter number of column stripes", $numColumns
+			GetValue	"Enter number of row stripes:", $numRows
+			GETYESNO	"Would you like to convert all matching occurrences of this shape?", $yesno
+
+			CALC $ColSpaces	=	$numColumns + 1
+			CALC $RowSpaces	=	$numRows + 1
+
+			GETEXTENTS $slayer, $xtntXL, $xtntYL, $xtntXU, $xtntYU
+
+			CALC $xtntX	=	$xtntXU - $xtntXL 
+			CALC $xtntX	=	$xtntX + $routeamt 
+			CALC $xtntY	=	$xtntYU - $xtntYL
+			CALC $xtntY	=	$xtntY + $routeamt
+
+			CALC $spacX	=	$xtntX / $ColSpaces
+			CALC $spacY	=	$xtntY / $RowSpaces
+			CALC $halfroute = 	$routeamt / 2
+			
+
+			#Create Dcode For Gap
+			CALLMACRO	_GetFirstBlankDcode , $TEMP1
+			Calc	$newDcode = $TEMP1
+			GETDCODEINFO $newDcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+			PUTDCODEINFO $newDcode, $$ROUND, $cus, $routeamt, $tempy, $type, $used, $flags, $scratch
+
+			CURRENTDCODE	$newDcode
+			ActiveLayer		$slayer
+
+			#Do column stripes
+			Set $cnt = 0
+			CALC $xcoord = 	$xtntXL - $halfroute
+			REPEAT $cnt < $numColumns
+				CALC $xcoord = $xcoord + $spacX
+				ADDDRAW $xcoord, $xtntYL, $xcoord, $xtntYU
+				CALC $cnt = $cnt + 1
+			END
+			#Do row stripes
+			Set $cnt = 0
+			CALC $ycoord = $xtntYL - $halfroute
+			REPEAT $cnt < $numRows
+				CALC $ycoord = $ycoord + $spacY
+				ADDDRAW $xtntXL, $ycoord, $xtntXU, $ycoord
+				CALC $cnt = $cnt + 1
+			END
+			SELECTGROUP
+				MODE	0
+				GO
+			END
+			SELECTGROUP
+
+				MODE	1
+				By		$$WINDOWMODE
+				Boundary	$$YES
+				Flashes	$$TRUE
+				Draws		$$TRUE
+				Arcs		$$TRUE
+				Polys		$$TRUE
+				DCODE	$newDcode
+				Layer		$slayer
+				GO  		$winX1, $winY1, $winX2, $winY2
+
+			END
+
+			POLARITY
+				By		$$GROUPMODE
+				SetTo		0
+				GO  		
+			END
+			SELECTGROUP
+				MODE	0
+				GO
+			END
+			SELECTFILTER	
+				BY		$$WINDOWMODE
+				Boundary	$$YES
+				Flashes	$$TRUE
+				Draws		$$TRUE
+				Arcs		$$TRUE
+				Polys		$$TRUE
+				DCODE	0
+				Layer		$slayer	
+			END
+			CALLMACRO	_GetFirstBlankDcode , $TEMP2
+			GERBER2CUSTOM
+				REPLACE $$YES
+				APNAME "WP"
+				GO $winX1, $winY1, $winX2, $winY2
+			END
+			REDRAW
+
+			IF $yesno == $$YES
+				DRAWNPADS
+					By		$$WINDOWMODE
+					Boundary	$$NO
+					DRAWS 	$$YES
+					ARCS 		$$YES
+					TEXT 		$$YES
+					Polys		$$YES	
+					DCode		All
+					Layer		$layer
+					Tool		All
+					NewDCode	$TEMP2
+					Tolerance	0.0005
+					METHOD	2
+					REPLACEROTATED $$YES
+					USENETS $$YES
+					INCLUDEISOLATEDITEMS $$YES
+					GO		$winX1, $winY1, $winX2, $winY2
+				END
+				ERASE
+					By		$$WINDOWMODE
+					Boundary	$$YES
+					Layer		$slayer
+					GO		$winX1, $winY1, $winX2, $winY2
+				END
+				REDRAW
+			ELSE
+
+				ERASE
+					By		$$WINDOWMODE
+					Boundary	$$NO
+					Layer		$layer
+					GO		$winX1, $winY1, $winX2, $winY2
+				END
+				SELECTGROUP
+					MODE		1
+					By		$$WINDOWMODE
+					Boundary	$$YES
+					Flashes	$$TRUE
+					Draws		$$TRUE
+					Arcs		$$TRUE
+					Polys		$$TRUE
+					DCODE		0
+					Layer		$slayer
+					GO  		$winX1, $winY1, $winX2, $winY2
+				END
+				MOVE
+					By		$$GROUPMODE
+					Tolayer	$layer
+					GO		0,0,0,0
+				END
+				SELECTGROUP
+					MODE	0
+					GO
+				END
+				REDRAW
+
+
+			END
+		END
+		GETYESNO "Convert Another?", $Repeat
+	END
+ENDMACRO
+
+MACRO _GetFirstBlankDcode
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	Set $1 = 9
+	Set $nLyrno = $$ACTIVELAYER
+	Set $$STATUS = $$TRUE
+
+	REPEAT $$STATUS == $$TRUE
+
+		Calc $1 = $1 + 1
+		GetApInfo $nLyrno, $1, $shp, $xs, $ys, $type, $tool, $toolsize, $legend
+
+	END
+ENDMACRO
+
+MACRO _GetFirstEmptyLayer
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	SET $LAY=1
+	SET $$STATUS = $$TRUE
+	REPEAT $$STATUS == $$TRUE
+		GETFIRSTITEM $LAY,$SEQ,$NET,$DCODE,$TYPE,$XS,$YS,$XS2,$YS2,$DIA,$CLK,$FLAG
+		IF $$STATUS ==$$FALSE
+			SET $1=$LAY
+		END
+		CALC $LAY=$LAY+1
+	END
+ENDMACRO
+MACRO _GetSecondEmptyLayer
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	SET $LAY=1
+	SET $$STATUS = $$TRUE
+	SET $cnt = 0
+	REPEAT $$STATUS == $$TRUE
+		GETFIRSTITEM $LAY,$SEQ,$NET,$DCODE,$TYPE,$XS,$YS,$XS2,$YS2,$DIA,$CLK,$FLAG
+		IF $$STATUS ==$$FALSE
+			REPEAT $cnt < 1
+				SET $$STATUS = $$TRUE
+				CALC $cnt = $cnt + 1
+			END
+			SET $1=$LAY
+		END
+		CALC $LAY=$LAY+1
+	END
+ENDMACRO

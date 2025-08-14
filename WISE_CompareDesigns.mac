@@ -1,0 +1,94 @@
+MACRO WISE_CompareDesigns
+	#This macro was written to assist in the setup and execution of design comparison.
+	#Version 1.0 written by Stan Keightley Jr.
+	#Copyright 2017 WISE Software Solutions, Inc.
+
+	#Setup form vars
+	SET $FormId = -1
+	SET $File1 = -1
+	SET $File2 = -1
+	SET $Edit1 = -1
+	SET $Edit2 = -1
+	SET $Button1 = -1
+	SET $Button2 = -1
+	SET $Static1 = -1
+	SET $Static2 = -1
+	SET $Static3 = -1
+	SET $Static4 = -1
+
+	SET $B1Click = $$FALSE
+	SET $B2Click = $$FALSE
+
+	STRSET $tolerance, ".0005"
+	STRSET $errmax, "500"
+
+	STRSET $FileName, ""
+	STRSET $FileName2, ""
+
+	#Find out if a design is already loaded, if not, query for both designs and load the first.
+	SPLITPATH $$DSNNAME, $dir, $file, $ext
+	STRCMP $file, "untitled"
+	IF $$STATUS == 0
+		DEFINEFORM 
+			FORMID		$FormId 
+			TITLE			"Design Compare"
+			MARGIN		0.5
+			STATICTEXT		  $Static1, 0.50, 0.0, 1.5, 0.25, "Select first design:", $$FALSE
+			FILEBROWSECONTROL $File1,   0.50, 0.25, 5.0, 0.25, "File Browser", "c:", "*.*", "txt", "Text | txt", 64, $FileName
+			STATICTEXT		  $Static2, 0.50, 0.75, 1.5, 0.25, "Select second design:", $$FALSE
+			FILEBROWSECONTROL $File2,   0.50, 1.0, 5.0, 0.25, "File Browser", "c:", "*.*", "txt", "Text | txt", 64, $FileName2
+			STATICTEXT		  $Static3, 0.50, 1.5, 1.5, 0.25, "Tolerance:", $$FALSE
+			EDITCONTROL	   $Edit1,   2.25, 1.5, 1.5, 0.25, $tolerance
+			STATICTEXT		  $Static4, 0.50, 1.75, 1.5, 0.25, "Max errors per layer:", $$FALSE
+			EDITCONTROL	   $Edit2,   2.25, 1.75, 1.5, 0.25, $errmax
+			BUTTONCONTROL	  $Button1, 0.50, 2.5, 2.0, 0.50, "Compare Designs", $B1Click
+			BUTTONCONTROL	  $Button2, 3.00, 2.5, 2.0, 0.50, "Cancel", $B2Click 
+		END
+		OpenForm $FormId
+		IF $B1Click == $$TRUE
+			STRREAD $tolerance, "%n", $tol
+			STRREAD $errmax, "%n", $errs
+			OPEN $FileName
+			CALLMACRO _DC, $FileName2, $tol, $errs
+		ELSE
+			STOP "Macro Cancelled"
+		END
+	ELSE
+		DEFINEFORM 
+			FORMID		$FormId 
+			TITLE			"Design Compare"
+			MARGIN		0.5
+			STATICTEXT		  $Static1, 0.50, 0.0, 2.5, 0.25, "Select design for comparison:", $$FALSE
+			FILEBROWSECONTROL $File1,   0.50, 0.25, 5.0, 0.25, "File Browser", "c:", "*.*", "txt", "Text | txt", 64, $FileName
+			STATICTEXT		  $Static3, 0.50, .75, 1.5, 0.25, "Tolerance:", $$FALSE
+			EDITCONTROL	   $Edit1,   2.25, .75, 1.5, 0.25, $tolerance
+			STATICTEXT		  $Static4, 0.50, 1, 1.5, 0.25, "Max errors per layer:", $$FALSE
+			EDITCONTROL	   $Edit2,   2.25, 1, 1.5, 0.25, $errmax
+			BUTTONCONTROL	  $Button1, 0.50, 1.5, 2.0, 0.50, "Compare Designs", $B1Click
+			BUTTONCONTROL	  $Button2, 3.00, 1.5, 2.0, 0.50, "Cancel", $B2Click 
+		END
+		OpenForm $FormId
+		IF $B1Click == $$TRUE
+			STRREAD $tolerance, "%n", $tol
+			STRREAD $errmax, "%n", $errs
+			CALLMACRO _DC, $FileName, $tol, $errs
+		ELSE
+			STOP "Macro Cancelled"
+		END
+	END
+	MESSAGEBOX "Design CompareMacro Finished", "Please see errors in Navigator", 0
+
+ENDMACRO
+Macro _DC
+	DESIGNCOMPARE 
+		FILENAME $1
+		LAYERCOMPARE
+			SOURCELAYER 0 # 0 for all
+			COMPARELAYER 0
+			TOLERANCE $2
+			MAXERRORS $3
+		END
+		# repeat LAYERCOMPARE block for each layer to be compared
+		GO
+	END
+ENDMACRO

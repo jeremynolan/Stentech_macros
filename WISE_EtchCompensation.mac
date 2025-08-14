@@ -1,0 +1,527 @@
+MACRO WISE_EtchCompensationAdvanced
+
+# This macro developed by WISE Software Aug 2021
+# Includes two options for Etch Compensation (Advanced and Simple)
+# WISE_AdvancedEtchCompensation - Trace Oversize, Pad Oversize, Area Oversize and includes the following Error Checks Pad to Pad, Pad to Trace, Trace to Trace and Acid Traps
+# WISE_SimpleEtchCompensation - Trace and Pad Oversize, Area Oversize, Copper to Copper Spacing and Acid Trap checks
+
+	SET $HaveTypes = 0
+	GETLAYERFROMTYPE $$LTTOP
+
+	SET $Top = $$STATUS
+	IF $$STATUS != 0
+		CALC $HaveTypes = $HaveTypes + 1
+	END
+
+	GETLAYERFROMTYPE $$LTBOTTOM
+	SET $Bot = $$STATUS
+
+	IF $$STATUS != 0
+		CALC $HaveTypes = $HaveTypes + 1
+	END
+
+	IF $HaveTypes == 0
+		STOP "No Top or Bottom Copper Layers Found! Please set layer types and try again."
+	END
+	SET $Tdrc = 0
+	SET $Tdff = 0
+	SET $Bdrc = 0
+	SET $Bdff = 0
+
+	##### Create Input form
+	########################################################
+	SET $formId 	= -1
+	SET $Edit0	= -1
+	SET $Edit1	= -1
+	SET $Edit2 	= -1
+	SET $Edit3	= -1
+	SET $Edit4 	= -1
+	SET $Edit5 	= -1
+	SET $List1 	= -1
+	SET $Drop1	= -1
+	SET $Drop2	= -1
+	SET $Button1 	= -1
+	SET $Button2 	= -1
+	SET $Static0 	= -1
+	SET $Static1 	= -1
+	SET $Static2 	= -1
+	SET $Static3 	= -1
+	SET $Static4 	= -1
+	SET $Static5 	= -1
+	SET $Static6 	= -1
+	SET $Static7 	= -1
+	##### Initialize string variables for form
+	############################################################
+	STRSET $draws,  	"0.001"
+	STRSET $pads,	"0.001"
+	STRSET $polys,	"0.0"
+	STRSET $p2p,		"0.005"
+	STRSET $p2t,		"0.005"
+	STRSET $t2t,		"0.005"
+
+	STRARRAY $dff(2)
+	STRSET $dff(1), "Yes"
+	STRSET $dff(2),  "No"
+	SET $dffDropSel = 1
+
+	##### Initialize the button clicked variables for the button controls
+	SET $OkClicked = $$FALSE
+	SET $CancelClicked = $$FALSE
+
+	# Define the form
+	DEFINEFORM
+		FORMID               	$formId
+		TITLE                	"Advanced Etch Compensation"
+		MARGIN               	.5	
+		#EditControl 			<controlId>, <x>, <y>, <w>, <h>, <strvar>	
+
+		STATICTEXT           	$Static1, 	0.2, .6, 2.5, 0.5, "Trace Oversize Amount:", $$FALSE
+		EDITCONTROL         	$Edit1, 		1.9, .6, 1.5, 0.25, $draws
+
+		STATICTEXT           	$Static2, 	0.2, 1.0, 2.5, 0.5, "Pad Oversize Amount:", $$FALSE
+		EDITCONTROL       	$Edit2,		1.9, 1.0, 1.5, 0.25, $pads
+
+		STATICTEXT           	$Static3, 	0.2, 1.4, 2.5, 0.5, "Area Oversize Amount:", $$FALSE
+		EDITCONTROL       	$Edit2,		1.9, 1.4, 1.5, 0.25, $polys
+
+		STATICTEXT           	$Static4, 	0.2, 1.8, 2.5, 0.5, "Pad to Pad Spacing:", $$FALSE
+		EDITCONTROL       	$Edit2,		1.9, 1.8, 1.5, 0.25, $p2p
+
+		STATICTEXT           	$Static5, 	0.2, 2.2, 2.5, 0.5, "Pad to Trace Spacing:", $$FALSE
+		EDITCONTROL       	$Edit2,		1.9, 2.2, 1.5, 0.25, $p2t
+
+		STATICTEXT           	$Static6, 	0.2, 2.6, 2.5, 0.5, "Trace to Trace Spacing:", $$FALSE
+		EDITCONTROL         	$Edit3, 		1.9, 2.6, 1.5, 0.25, $t2t
+
+		STATICTEXT		$Static7,  	0.2, 3.0, 2.5, 0.5, "Check for Acid Traps?", $$FALSE
+		DROPLISTCONTROL  $Drop1,   		1.9, 3.0, 1.5, 0.25, $dff, $dffDropSel
+
+		BUTTONCONTROL      	$Button1, 	1.25, 3.5, 1.0, 0.30, "OK", $OkClicked
+		BUTTONCONTROL     	$Button2, 	2.4, 3.5, 1.0, 0.30, "Cancel", $CancelClicked
+	END
+
+	OPENFORM $formId
+
+	IF $CancelClicked == $$TRUE
+		STOP "Macro cancelled"
+	END
+	#Convert strings to values
+	STRREAD $draws, "%n", $drawO
+	STRREAD $pads, "%n", $padO
+	STRREAD $polys, "%n", $polyO
+	STRREAD $p2p, "%n", $p2pdrc
+	STRREAD $p2t, "%n", $p2tdrc
+	STRREAD $t2t, "%n", $t2tdrc
+	##### Process the Top Layer
+	IF $Top > 0
+		GETEXTENTS $Top, $lx, $ly, $ux, $uy, $$YES, $$YES
+		IF $drawO != 0
+			DCODESCALE #Draws, arcs, polylines
+				FIXED $$YES
+				SCALE $drawO, $drawO
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$NO
+				DRAWS $$YES
+				ARCS $$YES
+				POLYS $$YES
+				TEXT $$NO
+				LAYER $Top 
+				DCODE 0 # Copy all D-codes
+				GO $lx,$ly,$ux,$uy
+			END
+		END
+		IF $padO != 0
+			DCODESCALE #Draws, arcs, polylines
+				FIXED $$YES
+				SCALE $padO, $padO
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$YES
+				DRAWS $$NO
+				ARCS $$NO
+				POLYS $$NO
+				TEXT $$NO
+				LAYER $Top 
+				DCODE 0 # Copy all D-codes
+				GO $lx,$ly,$ux,$uy
+			END
+		END
+		IF $polyO != 0
+			POLYOVERUNDERSIZE
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				LAYER $Top 
+				Oversize $$YES
+				OversizeVoid $$NO
+				ByAmount $$YES
+				Amount $polyO
+				GO $lx, $ly, $ux, $uy
+			END
+
+		END
+		##### Check spacing errors
+		DRC
+			PAD2PAD $p2pdrc
+			PAD2TRACE $p2tdrc
+			TRACE2TRACE $t2tdrc
+			MAXERRORS 5000
+			LAYER $Top
+			WINDOWMODE $$NO
+			GO
+		END
+		IF $$DRCERRORCOUNT > 0
+			STRWRITE $TopDRC, "Spacing violations were found on the Top layer."
+			CALC $Tdrc = $Tdrc + 1
+		END
+		IF $dffDropSel == 1
+			# Do the Acid trap test
+			Set $IgnoredErrorCnt = 0
+			DFFAcidTrap $Top, 0.008, 45.0, $IgnoredErrorCnt
+			IF $$STATUS > 0
+				STRWRITE $TopDFF, "Acid Traps were found on the Top layer."	
+				CALC $Tdff = $Tdff + 1
+			END
+		END
+	END
+	##### Process the Bottom Layer
+	IF $Bot > 0
+		GETEXTENTS $Bot, $lx, $ly, $ux, $uy, $$YES, $$YES
+		IF $drawO != 0
+			DCODESCALE #Draws, arcs, polylines
+				FIXED $$YES
+				SCALE $drawO, $drawO
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$NO
+				DRAWS $$YES
+				ARCS $$YES
+				POLYS $$YES
+				TEXT $$NO
+				LAYER $Bot 
+				DCODE 0 # Copy all D-codes
+				GO $lx,$ly,$ux,$uy
+			END
+		END
+		IF $padO != 0
+			DCODESCALE #Draws, arcs, polylines
+				FIXED $$YES
+				SCALE $padO, $padO
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$YES
+				DRAWS $$NO
+				ARCS $$NO
+				POLYS $$NO
+				TEXT $$NO
+				LAYER $Bot 
+				DCODE 0 # Copy all D-codes
+				GO $lx,$ly,$ux,$uy
+			END
+		END
+		IF $polyO != 0
+			POLYOVERUNDERSIZE
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				LAYER $Bot 
+				Oversize $$YES
+				OversizeVoid $$NO
+				ByAmount $$YES
+				Amount $polyO
+				GO $lx, $ly, $ux, $uy
+			END
+
+		END
+		##### Check spacing errors
+		DRC
+			PAD2PAD $p2pdrc
+			PAD2TRACE $p2tdrc
+			TRACE2TRACE $t2tdrc
+			MAXERRORS 5000
+			LAYER $Bot 
+			WINDOWMODE $$NO
+			GO
+		END
+
+		IF $$DRCERRORCOUNT > 0
+			STRWRITE $BotDRC, "Spacing violations were found on the Bottom layer."
+			CALC $Bdrc = $Bdrc + 1
+		END
+		IF $dffDropSel == 1
+			# Do the Acid trap test
+			Set $IgnoredErrorCnt = 0
+			DFFAcidTrap $Bot , 0.008, 45.0, $IgnoredErrorCnt
+
+			IF $$STATUS > 0
+				STRWRITE $BotDFF, "Acid Traps were found on the Bottom layer."
+				CALC $Bdff = $Bdff + 1	
+			END
+		END
+	END
+	STRWRITE $Message, "Macro Complete."
+	SET $errors = 0
+	IF $Tdrc >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $TopDRC
+		CALC $errors = $errors + 1
+	END
+	IF $Tdff >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $TopDFF
+		CALC $errors = $errors + 1
+	END
+	IF $Bdrc >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $BotDRC
+		CALC $errors = $errors + 1
+	END
+	IF $Bdff >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $BotDFF
+		CALC $errors = $errors + 1
+	END
+	IF $errors > 0
+		STRCAT $Message, "\nPlease check and fix the violations in the Navigator."
+	ELSE
+		STRCAT $Message, "\nNo errors found."
+	END
+	MESSAGEBOX "Advanced Etch Compensation", $Message, 0
+
+ENDMACRO
+MACRO WISE_EtchCompensationSimple
+
+	SET $HaveTypes = 0
+	GETLAYERFROMTYPE $$LTTOP
+
+	SET $Top = $$STATUS
+	IF $$STATUS != 0
+		CALC $HaveTypes = $HaveTypes + 1
+	END
+
+	GETLAYERFROMTYPE $$LTBOTTOM
+	SET $Bot = $$STATUS
+
+	IF $$STATUS != 0
+		CALC $HaveTypes = $HaveTypes + 1
+	END
+
+	IF $HaveTypes == 0
+		STOP "No Top or Bottom Copper Layers Found! Please set layer types and try again."
+	END
+	SET $Tdrc = 0
+	SET $Tdff = 0
+	SET $Bdrc = 0
+	SET $Bdff = 0
+
+	##### Create Input form
+	########################################################
+	SET $formId 	= -1
+	SET $Edit0	= -1
+	SET $Edit1	= -1
+	SET $Edit2 	= -1
+	SET $Edit3	= -1
+	SET $Edit4 	= -1
+	SET $Edit5 	= -1
+	SET $List1 	= -1
+	SET $Drop1	= -1
+	SET $Drop2	= -1
+	SET $Button1 	= -1
+	SET $Button2 	= -1
+	SET $Static0 	= -1
+	SET $Static1 	= -1
+	SET $Static2 	= -1
+	SET $Static3 	= -1
+	SET $Static4 	= -1
+	SET $Static5 	= -1
+	SET $Static6 	= -1
+	##### Initialize string variables for form
+	############################################################
+	STRSET $conductors,  	"0.001"
+	STRSET $polys,		"0.0"
+	STRSET $drc,			"0.005"
+
+	STRARRAY $dff(2)
+	STRSET $dff(1), "Yes"
+	STRSET $dff(2),  "No"
+	SET $dffDropSel = 1
+
+	##### Initialize the button clicked variables for the button controls
+	SET $OkClicked = $$FALSE
+	SET $CancelClicked = $$FALSE
+
+	# Define the form
+	DEFINEFORM
+		FORMID               	$formId
+		TITLE                	"Simple Etch Compensation"
+		MARGIN               	.5	
+		#EditControl 			<controlId>, <x>, <y>, <w>, <h>, <strvar>	
+
+		STATICTEXT           	$Static1, 	0.2, .6, 2.5, 0.5, "Trace and Pad Oversize Amount:", $$FALSE
+		EDITCONTROL         	$Edit1, 		2.25, .6, 1.5, 0.25, $conductors
+
+		STATICTEXT           	$Static2, 	0.2, 1.0, 2.5, 0.5, "Area Oversize Amount", $$FALSE
+		EDITCONTROL       	$Edit2,		2.25, 1.0, 1.5, 0.25, $polys
+
+		STATICTEXT           	$Static3, 	0.2, 1.4, 2.5, 0.5, "Copper to Copper Spacing", $$FALSE
+		EDITCONTROL       	$Edit2,		2.25, 1.4, 1.5, 0.25, $drc
+
+		STATICTEXT		$Static4,  	0.2, 1.8, 2.5, 0.5, "Check for Acid Traps?", $$FALSE
+		DROPLISTCONTROL  $Drop1,   		2.25, 1.8, 1.5, 0.25, $dff, $dffDropSel
+
+		BUTTONCONTROL      	$Button1, 	1.5, 2.35, 1.0, 0.30, "OK", $OkClicked
+		BUTTONCONTROL     	$Button2, 	2.79, 2.35, 1.0, 0.30, "Cancel", $CancelClicked
+	END
+
+	OPENFORM $formId
+
+	IF $CancelClicked == $$TRUE
+		STOP "Macro cancelled"
+	END
+	STRREAD $conductors, "%n", $conductorsO
+	STRREAD $polys, "%n", $polyO
+	STRREAD $drc, "%n", $drcAmt
+
+	##### Process the Top Layer
+	IF $Top > 0
+		GETEXTENTS $Top, $lx, $ly, $ux, $uy, $$YES, $$YES
+		IF $conductorsO != 0
+			DCODESCALE #Draws, arcs, polylines
+				FIXED $$YES
+				SCALE $conductorsO, $conductorsO 
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$YES
+				DRAWS $$YES
+				ARCS $$YES
+				POLYS $$YES
+				TEXT $$NO
+				LAYER $Top 
+				DCODE 0 # Copy all D-codes
+				GO $lx,$ly,$ux,$uy
+			END
+		END
+		IF $polyO != 0
+			POLYOVERUNDERSIZE
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				LAYER $Top 
+				Oversize $$YES
+				OversizeVoid $$NO
+				ByAmount $$YES
+				Amount $polyO
+				GO $lx, $ly, $ux, $uy
+			END
+		END
+		##### Check spacing errors
+		DRC
+			PAD2PAD $drcAmt
+			PAD2TRACE $drcAmt
+			TRACE2TRACE $drcAmt
+			MAXERRORS 5000
+			LAYER $Top
+			WINDOWMODE $$NO
+			GO
+		END
+		IF $$DRCERRORCOUNT > 0
+			STRWRITE $TopDRC, "Spacing violations were found on the Top layer."
+			CALC $Tdrc = $Tdrc + 1
+		END
+		IF $dffDropSel == 1
+			# Do the Acid trap test
+			Set $IgnoredErrorCnt = 0
+			DFFAcidTrap $Top, 0.008, 45.0, $IgnoredErrorCnt
+			IF $$STATUS > 0
+				STRWRITE $TopDFF, "Acid Traps were found on the Top layer."	
+				CALC $Tdff = $Tdff + 1
+			END
+		END
+	END
+	##### Process the Bottom Layer
+	IF $Bot > 0
+		GETEXTENTS $Bot, $lx, $ly, $ux, $uy, $$YES, $$YES
+		IF $conductorsO != 0
+			DCODESCALE #Draws, arcs, polylines
+				FIXED $$YES
+				SCALE $conductorsO, $conductorsO 
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$YES
+				DRAWS $$YES
+				ARCS $$YES
+				POLYS $$YES
+				TEXT $$NO
+				LAYER $Bot 
+				DCODE 0 # Copy all D-codes
+				GO $lx,$ly,$ux,$uy
+			END
+		END
+		IF $polyO != 0
+			POLYOVERUNDERSIZE
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				LAYER $Bot 
+				Oversize $$YES
+				OversizeVoid $$NO
+				ByAmount $$YES
+				Amount $polyO
+				GO $lx, $ly, $ux, $uy
+			END
+
+		END
+		##### Check spacing errors
+		DRC
+			PAD2PAD $drcAmt
+			PAD2TRACE $drcAmt
+			TRACE2TRACE $drcAmt
+			MAXERRORS 5000
+			LAYER $Bot 
+			WINDOWMODE $$NO
+			GO
+		END
+
+		IF $$DRCERRORCOUNT > 0
+			STRWRITE $BotDRC, "Spacing violations were found on the Bottom layer."
+			CALC $Bdrc = $Bdrc + 1
+		END
+		IF $dffDropSel == 1
+			# Do the Acid trap test
+			Set $IgnoredErrorCnt = 0
+			DFFAcidTrap $Bot , 0.008, 45.0, $IgnoredErrorCnt
+
+			IF $$STATUS > 0
+				STRWRITE $BotDFF, "Acid Traps were found on the Bottom layer."
+				CALC $Bdff = $Bdff + 1	
+			END
+		END
+	END
+	STRWRITE $Message, "Macro Complete."
+	SET $errors = 0
+	IF $Tdrc >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $TopDRC
+		CALC $errors = $errors + 1
+	END
+	IF $Tdff >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $TopDFF
+		CALC $errors = $errors + 1
+	END
+	IF $Bdrc >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $BotDRC
+		CALC $errors = $errors + 1
+	END
+	IF $Bdff >0
+		STRCAT $Message, "\n"
+		STRCAT $Message, $BotDFF
+		CALC $errors = $errors + 1
+	END
+	IF $errors > 0
+		STRCAT $Message, "\nPlease check and fix the violations in the Navigator."
+	ELSE
+		STRCAT $Message, "\nNo errors found."
+	END
+	MESSAGEBOX "Simple Etch Compensation", $Message, 0
+
+
+ENDMACRO

@@ -1,0 +1,5 @@
+MACRO Polylines2Draws
+
+CONVPOLYTODRAW
+
+ENDMACRO

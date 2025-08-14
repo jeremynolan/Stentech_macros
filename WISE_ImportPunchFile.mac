@@ -1,0 +1,70 @@
+#################################################################################################
+# This macro was written by WISE Software Solutions, Inc. May 2015 to import punch file format: 			#
+# 	2 N  7.1631  0.6028 1													#
+# 	2 N  3.4824  0.7301 2													#
+# 	2 N  14.9546  0.8087 3												#
+# 	2 N  45.6842  0.8882 4												#
+# This macro imports the x,y cordinate with .205 mm tool size. 								#
+# Multi file select is supported, layers are named from the filename.							#
+# All coordinates are assumed to be in millimeters.										#
+#################################################################################################
+
+MACRO ImportPunchFile
+
+	Set $arraySize = 1000
+	STRARRAY $filenames($arraySize)
+	Set $openMask  = 70	# FILEMUSTEXIST + GET/IMPORT MODE + MULTISELECT
+
+	FILEGETNAME "Open Punch File", "", "", "pnc", "Punch files|pnc pch pun",  $openMask, $filenames, $folder
+	Set $fileCount = $$STATUS
+
+	IF $fileCount == 0
+		STOP "User Aborted."
+	END
+
+	Set $fileIndex = 0
+	REPEAT $fileIndex < $fileCount
+
+		Calc $fileIndex = $fileIndex + 1		# one based indexing
+
+		STRSET $filepath, $folder
+		STRCAT $filepath, "\\"
+		STRCAT $filepath, $filenames($fileIndex)
+
+		FILEOPEN $fd, $filepath, "r"
+		IF $$STATUS == $$FALSE
+			Stop "File open failed."
+		END
+
+		CREATELAYER 0, "", ""
+		Calc $outputLayer = $$STATUS
+		IF $outputLayer <= 0
+			STOP "Couldn't create output layer"
+		END
+	
+		LAYERN $outputLayer
+			Type $$LTNC
+			LYRNAME $filenames($fileIndex)
+			NCToolTable "PunchImport"
+		END
+
+		ACTIVELAYER $outputLayer
+
+		GETNCTOOLDESIGNDATA 1, $size, $type, $usage, $legend, $mask, $pilot, $order, $color, $pattern
+		IF $$STATUS == $$FALSE
+			Calc $size =  .205 / 25.4
+			PUTNCTOOLDESIGNDATA 1
+		END
+
+		CURRENTNCTOOL 1
+
+		FILEREAD $fd, "%n %s %n %n %n", $f1, $f2, $x, $y, $f5
+		REPEAT $$STATUS
+			ADDDRILL $x / 25.4, $y / 25.4
+			FILEREAD $fd, "%n %s %n %n %n", $f1, $f2, $x, $y, $f5
+		END
+
+		FILECLOSE $fd
+	END
+
+ENDMACRO

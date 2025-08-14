@@ -1,0 +1,177 @@
+MACRO CreateLayerDataFromFontFile
+
+	# This macro will create 128 layers. It should be run from a new/blank design.
+	# Each layer will contain the font vector data in an eight by eight mil box.
+
+	IF $$MAXLAYERS < 128
+		STOP "Not enough layers. Use Options|Configure to specify 128 layers and try again."
+	END
+
+	GETAPPDATAFOLDER $strAppFolder
+	STRSET $filename, "Stroke-Standard.fnt"
+	STRARRAY $fileFilter(1)	# Increase size of array to match the number of filters use need
+	STRCPY $fileFilter(1), "Stroke Font Files|fnt font"
+#	STRCPY $fileFilter(2), "Stroke Font Files2|fnt2 font2"		# Add additional filters if needed
+
+#	FILEGETNAME prompt, path, filename, default_extension, file_filter, flags, output_filename
+#	flags can be combinations of:
+#	FILEMUSTEXIST		4	(get mode default)
+#	SAVEMODE			32
+#	GETMODE			64
+#	NOOVERWRITEPROMPT	128	(save mode default)
+#	ACCEPT_FOLDER		256
+
+	FILEGETNAME "Open Stroke Font File", $strAppFolder, $filename , "fnt", $fileFilter, 64, $filename
+	IF $$STATUS == 0
+		STOP "User abort."
+	END
+
+	SET $dcode = 10
+	GETDCODEINFO $dcode, $shp, $custom, $xs, $ys, \
+				$type, $usedcnt, $flags, $rot, $scratch
+	SET $xs = 0.0005
+	SET $ys = $xs
+	PUTDCODEINFO
+	CURRENTDCODE $dcode
+
+	FILEOPEN $file, $filename, "r"
+	IF $$STATUS == 0
+		STOP "Can't open input file."
+	END
+
+	FILEREAD $file, "", $strHeader
+	IF $$STATUS == 0
+		STOP "Can't read input file."
+	END
+
+	STRSUB $strHeader, 1, 1, $strHeader
+	STRCMP $strHeader, "#"
+	IF $$STATUS != 0
+		# Call another macro to handle the old style?
+		STOP "Font file format older than 16.4 not supported."
+	END
+
+#	SET $nChar = 0
+	FILEREAD $file, "CHAR:  %n\n", $nChar
+
+	REPEAT $$STATUS
+
+		LAYERN $nChar + 1
+			STRWRITE $strLayerName, "Char%03.0n", $nChar
+			LYRNAME $strLayerName
+			VISIBILITY $$YES
+		END
+
+		ACTIVELAYER $nChar + 1
+
+		FILEREAD $file, "%s\n", $strWord
+
+		REPEAT $$STATUS
+
+			STRCMP $strWord, "ffff"
+			IF $$STATUS
+
+				STRSUB $slx, 2, 1, $strWord
+				STRSUB $sly, 1, 1, $strWord
+				STRSUB $sux, 4, 1, $strWord
+				STRSUB $suy, 3, 1, $strWord
+				STRREAD $slx, "%n", $x1
+				STRREAD $sly, "%n", $y1
+				STRREAD $sux, "%n", $x2
+				STRREAD $suy, "%n", $y2
+
+				CALC $y1 = 7.0 - $y1
+				CALC $y2 = 7.0 - $y2
+
+				ADDDRAW $x1 / 1000, $y1 / 1000, $x2 / 1000, $y2 / 1000
+
+				FILEREAD $file, "%s\n", $strWord
+			END
+		END
+
+		FILEREAD $file, "CHAR:  %n\n", $nChar
+	END
+
+	FILECLOSE $file
+
+ENDMACRO
+
+
+MACRO CreateFontFileFromLayerData
+
+	# This macro expects there to be 128 layers in the current design.
+	# Each layer should contain draw db items that represent the font
+	#  vector data in an eight by eight mil box.
+
+	STRSET $filename, "MacroOut.fnt"
+	STRARRAY $fileFilter(1)
+	STRCPY $fileFilter(1), "Stroke Font Files|fnt, font"
+#	STRCPY $fileFilter(2), "Stroke Font Files2|fnt2, font2"
+
+	FILEGETNAME "Save Stroke Font File", "", $filename, "fnt", $fileFilter, 32, $filename
+	IF $$STATUS == 0
+		STOP "User abort."
+	END
+
+# To provide your own overwrite prompt add 128 to file name flags above to disable builtin overwrite prompt.
+# Then un-comment the following overwrite check
+#	FILEOPEN $file, $filename, "r"
+#	IF $$STATUS
+#		FILECLOSE $file
+#		GETYESNO "File already exists. Overwrite?", $nOverwrite
+#		IF $nOverwrite == 0
+#			STOP "User abort."
+#		END
+#	END
+
+	FILEOPEN $file, $filename, "w"
+	IF $$STATUS == 0
+		STOP "Can't open output file."
+	END
+
+	FILEWRITE $file, "# 16.4"
+
+	# for each layer
+	Set $nLayerNumber = 1
+	
+	REPEAT $nLayerNumber <= $$MAXLAYERS
+
+		GETLAYER $nLayerNumber, $fn, $ln, $ap, $vis, $fc, $dc, $type, $pol, $key, $bHasData,\
+						$lx, $ly, $ux, $uy, $netid
+		IF $$STATUS
+
+			STRCMP $ln, "<empty>"
+			IF $$STATUS != 0
+
+				FILEWRITE $file, "CHAR:  %.0n", $nLayerNumber - 1
+
+				# for each draw on layer
+				GETFIRSTITEM $nLayerNumber, $seqno, $netid, $dcode, $type,\
+							$x1, $y1, $x2, $y2, $dia, $cw, $flags
+				REPEAT $$STATUS
+					IF $type == $$DBDRAW
+						# write encoded draw
+						ROUND $x1 = $x1 * 1000
+						ROUND $y1 = $y1 * 1000
+						CALC $y1 = 7 - $y1
+						ROUND $x2 = $x2 * 1000
+						ROUND $y2 = $y2 * 1000
+						CALC $y2 = 7 - $y2
+						FILEWRITE $file, "%.0n%.0n%0.n%0.n", $y1, $x1, $y2, $x2
+					END
+					GETNEXTITEM
+				END
+
+				FILEWRITE $file, "ffff"
+			END
+
+		END
+
+		CALC $nLayerNumber = $nLayerNumber + 1
+
+	END
+
+	FILECLOSE $file
+
+ENDMACRO
+

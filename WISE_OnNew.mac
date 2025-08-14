@@ -1,0 +1,21 @@
+# To have GerbTool automatically run a macro at startup time,
+# after opening a design, or after executing the File/New command,
+# name the macros OnStartup, OnOpen, or OnNew respectively.
+#
+#MACRO OnStartup
+#
+# your stuff here...
+#
+#ENDMACRO
+
+#MACRO OnOpen
+#
+# your stuff here...
+#
+#ENDMACRO
+
+#MACRO OnNew
+#
+# your stuff here...
+#
+#ENDMACRO

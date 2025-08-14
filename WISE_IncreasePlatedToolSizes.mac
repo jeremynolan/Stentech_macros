@@ -1,0 +1,42 @@
+# This macro increases the size of the plated tools on a given layer by a specified amount.
+#Current version written by Stan Keightley Jr., Copyright 1998-2018 WISE Software Solutions, Inc.
+MACRO IncreasePlatedTools
+	SET $NC = 1
+	SET $increase = .04
+	CALLMACRO _GetNCLyr, $NC
+	IF $NC !=0
+		GETVALUE "Enter drill layer on which to increase the plated tool sizes:", $NC
+		GETVALUE "Enter the value (in inches) by which the sizes of the plated tools should be increased:", $increase
+		ACTIVELAYER $NC
+		SET $tool = 1
+		REPEAT $tool <= 99
+			GETNCTOOLDESIGNDATA $tool, $size, $type, $usage, $legend, $mask, $pilot, $export, $color, $pattern
+			IF $$STATUS == $$TRUE
+				IF $usage == 1
+					CALC $size = $size + $increase
+					PUTNCTOOLDESIGNDATA $tool
+				END
+			END
+			CALC $tool = $tool + 1
+		END
+	END
+
+ENDMACRO
+MACRO _GetNCLyr
+	Set $Repeat = $$YES
+	SET $1 = 1
+	GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	Repeat $Repeat != $$NO
+		IF $type == $$LTNC
+			Set $Repeat = $$NO
+		ELSE
+			IF $1 == $$MAXLAYERS
+				SET $1 = -1
+				Set $Repeat = $$NO
+			END
+			CALC $1 = $1 + 1
+			GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		END
+	END
+ENDMACRO
+

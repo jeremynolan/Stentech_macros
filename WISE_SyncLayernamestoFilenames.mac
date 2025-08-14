@@ -1,0 +1,20 @@
+MACRO SyncLayernamesToFilenames
+	SET $layer = 1
+	GETLAYER $layer, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	REPEAT $layer < $$MAXLAYERS
+		STRCMP $ln, ""
+		IF $$STATUS != 0
+			STRCMP $ln,  "<empty>"
+			IF $$STATUS != 0
+				STRCMP $ln, "<unnamed>"
+				IF $$STATUS != 0
+					LAYERN $layer
+						FILE $ln
+					END
+				END
+			END
+		END
+		CALC $layer = $layer + 1
+		GETLAYER $layer, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	END
+ENDMACRO

@@ -1,0 +1,22 @@
+MACRO AllApsSMT
+#This macro converts all TH aps to SMT
+	COMPACTAPLIST $$YES
+	SET $dcode = 10
+	REPEAT $$STATUS == $$TRUE
+		GETDCODEINFO $dcode, $shp, $custom, $xs, $ys, 	$type, $usedcnt, $flags, $rot, $scratch
+		IF $shp == $$CUSTOM
+			SET $type = 1
+			PUTDCODEINFO
+		END
+		IF $shp == $$ROUND
+			SET $type = 1
+			PUTDCODEINFO
+		END
+		IF $shp == $$SQUARE
+			SET $type = 1
+			PUTDCODEINFO
+		END
+		CALC $dcode = $dcode + 1
+	END
+
+ENDMACRO

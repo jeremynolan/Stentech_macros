@@ -1,0 +1,78 @@
+MACRO LoadCustomAperture
+
+	GETSTRING "Enter library filename:", $strFilename
+	GETSTRING "Enter Custom Aperture Name", $strCustomName
+	STRLEN $strCustomName
+
+	REPEAT $$STATUS
+
+		LOADCUSTOMAP $strFilename, $strCustomName
+
+		IF $$STATUS == $$FALSE
+			MESSAGEBOX "Error",  "Custom Aperture not found.", 0
+		ELSE
+			SET $nDcode = 10
+			CALLMACRO "_GetFirstBlankDcode", $nDcode
+			STRWRITE $prompt, "Assign %s to a D-Code %.0n?", $strCustomName, $nDcode
+			GETYESNO $prompt, $yesno
+
+			IF $yesno == $$YES
+
+				SET $HOLETYPE=2
+				SET $TOOLNUM=0
+				SET $TOOLSIZE=0.0
+				SET $TOOLLEGEND=0
+				SET $nLayer = $$ACTIVELAYER
+				STRSET $APINFOCUSTOMAPNAME, $strCustomName
+				SET $nShape = $$CUSTOM
+				SET $nXsize = 0.0
+				SET $nYsize = 0.0
+				PUTAPINFO $nLayer , $nDcode, $nShape, $nXsize, $nYsize,  $HOLETYPE, $TOOLNUM, $TOOLSIZE, $TOOLLEGEND
+
+			END
+
+		END
+
+		GETSTRING "Enter Aperture Custom Name", $strCustomName
+		STRLEN $strCustomName
+	END
+
+ENDMACRO
+
+MACRO LoadCustomLib
+
+	GETSTRING "Enter library filename:", $strFilename
+	STRLEN $strFilename
+
+	REPEAT $$STATUS
+
+		LOADCUSTOMAP $strFilename
+
+		IF $$STATUS == $$FALSE
+			MESSAGEBOX "Error",  "Custom Aperture not found.", 0
+		END
+
+		GETSTRING "Enter filename", $strFilename
+		STRLEN $strFilename
+	END
+
+ENDMACRO
+
+MACRO _GetFirstBlankDcode
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	Set $1 = 9
+	Set $nLyrno = $$ACTIVELAYER
+	Set $$STATUS = $$TRUE
+
+	REPEAT $$STATUS == $$TRUE
+
+		Calc $1 = $1 + 1
+		GetApInfo $nLyrno, $1, $shp, $xs, $ys, $type, $tool, $toolsize, $legend
+
+	END
+
+END

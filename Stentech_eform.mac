@@ -1,0 +1,222 @@
+MACRO EformStencil
+	StrWrite $log, "EformStencil Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Per Stentech specifications
+	# This macros Copies a Layer to 2 other layers, renames them to add _EF and FIDS
+	# Import a Gerber File for Border
+	# Scale image and d-codes on the _EF Layer
+	# Delete fiducial d-codes on the _EF Layer
+	# Adds Redline Text to Fids Layer
+	# V2.1 added SCAN Layer and exports to Gerber
+	# Version 2.1 written January 2021 By Stan Keightley of WISE Software Solutions, Inc.
+	# Updated 3/30/22 to use variables for Scale factors based on Thickness of material and keep small aps as Flashes
+	# Updated by Robbie Devennie to utilise GetFreeDcode and GetFreeLayer
+	# Updated by Robbie Devennie to control export format. Eform Plotter prefers Inches in 2,4 format
+	Undo $$NO
+	Set $eflayer         = 0
+	Set $fidlayer        = 0
+	Set $scnlayer        = 0
+	Set $Thick           = 2
+	Set $Under2MilsSF    = .9990
+	Set $Over2MilsSF     = .9991
+	Set $Under2MilsFidSF = .9994
+	Set $Over2MilsFidSF  = .9994
+	GetValue "Which Layer would you like to Process for eform? (0 to Stop)", $layer
+	Repeat $layer > 0
+		GetFreeLayer $eflayer
+		CopyLayer $layer, $eflayer
+		GetFreeLayer $fidlayer
+		CopyLayer $layer, $fidlayer
+		GetLayer  $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		StrWrite  $efln,  	 "%s_EF", 			 $ln
+		StrWrite  $fidln, 	 "%s_FIDS", 		 $ln
+		StrWrite  $scnln, 	 "%s_SCAN", 		 $ln
+		StrWrite  $squeegee, "%s_SQUEEGEE_VIEW", $ln
+		StrWrite  $designerInfo, "Eform Layer for %s", $ln
+		Layern $layer
+			LyrName $ln
+			Comments $designerInfo
+		End
+		StrWrite $designerInfo, "Eform Layer for %s", $ln
+		Layern $eflayer
+			LyrName $efln
+			Comments $designerInfo
+		End
+		StrWrite $designerInfo, "Eform Fiducial Layer for %s", $fidln
+		Layern $fidlayer
+			LyrName $fidln
+			Comments $designerInfo
+		End
+		GetValue "Please enter a fiducial Dcode: (0 to Stop)", $fid
+		Repeat $fid > 0
+			GetExtents $eflayer, $lx,$ly, $ux,$uy, $$YES, $$YES
+			Erase
+				By $$WINDOWMODE
+				Boundary 	$$YES
+				RemoveTypes 0
+				Flashes 	$$YES
+				Dcode 		$fid
+				Layer 		$eflayer
+				Go $lx,$ly, $ux,$uy
+			End
+			GetValue "Please enter another fiducial Dcode: (0 to Stop)", $fid
+		End
+		# Copy to Scan Layer
+		GetFreeLayer $scnlayer
+		CopyLayer $eflayer, $scnlayer
+		StrWrite $scnln, "%s_SCAN", $ln
+		StrWrite $designerInfo, "Eform Scan Layer for %s", $scnln
+		Layern $scnlayer
+			LyrName $scnln
+			Comments $designerInfo
+		End
+		# Import Border
+		FileGetName "Import the Border Layer", "", "", "*", "Gerber|*.*", 64, $filename
+		If $$STATUS == 0
+			# Stop "User Aborted."
+		Else
+			# Import selected File
+			ImportGerber $filename, $eflayer
+			StrWrite $designerInfo, "Eform EF Layer for %s", $efln
+			Layern $eflayer
+				LyrName $efln
+				File $efln
+				Comments $designerInfo
+			End
+		End
+		CALLMACRO _ThicknessDialog, $Thick
+		If $Thick == 2
+			Set $SF  = $Over2MilsSF
+			Set $FSF = $Over2MilsFidSF
+		Else
+			Set $SF  = $Under2MilsSF
+			Set $FSF = $Under2MilsFidSF
+		End
+		# GetValue "Please enter a Scale factor for the data:", $scale
+		ScaleLayers
+			Layer $eflayer
+			Scale $SF, $SF
+			Offsets 0, 0
+			Go
+		End
+		# GetValue "Please enter a Scale factor for the fiducial Layer:", $scale
+		ScaleLayers
+			Layer $fidlayer
+			Scale $FSF, $FSF
+			Offsets 0, 0
+			Go
+		End
+		GetValue "Please enter a Scale factor for the dcodes:", $dscale
+		DcodeScale
+			Fixed $$YES
+			Scale $dscale, $dscale
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Draws 	 $$YES
+			Arcs 	 $$YES
+			Polys 	 $$YES
+			Text 	 $$YES
+			Layer 	 $eflayer
+			Dcode 	 0
+			Go $lx,$ly, $ux,$uy
+		End
+		GetExtents $fidlayer, $lx, $ly, $ux, $uy
+		Calc $y = $uy + .5
+		Calc $x = -1.25
+		ActiveLayer $fidlayer
+		Set $rldcode = 10
+		GetFreeDcode $rldcode
+		GetDcodeInfo $rldcode, $shp, $cus, $x, $y, $typ, $used, $flags, $scr
+		Set $shp   = $$ROUND
+		Set $xsize = .005
+		Set $ysize = .005
+		Set $typ   = 0
+		PutDcodeInfo $rldcode, $shp, $cus, $xsize, $ysize, $typ, $used, $flags, $scr
+		Text
+			Height		0.20
+			Width		0.10
+			Rotate		0
+			Slant		0
+			Mirror		$$NO
+			Font		"Stroke-Standard" # change to Tahoma in the future
+			LineSpace	1
+			CharSpace	1
+		End
+		Redline
+			Dcode $rldcode
+			Mode  0
+			Go $squeegee, $x, $y
+		End
+		GetYesNo "Apply BandEtch to Layer?", $yesno
+		If $yesno == $$YES
+			CALLMACRO Stentech_BandEtchPolys, $eflayer
+		End
+		# Exports
+		# export the _ef Layer & the fid Layer without customs flattened and the scan Layer with them flattened
+		StrWrite $effn,  "%s.gbr", $efln
+		StrWrite $fidfn, "%s.gbr", $fidln
+		StrWrite $scnfn, "%s.gbr", $scnln
+		ExportFormat "Gerber"
+			Dialect         "RS274X"
+			M.N             2,4
+			Mode            "Absolute"
+			ZeroSuppression "Leading"
+			Terminator      "*\r\n"
+			CharSet         "ASCII"
+			Metric          $$NO
+			Modal           $$NO
+			Nets            $$NO
+			Userdata        $$YES
+			Gcmds           $$YES
+			Comments        $$YES
+			FlattenCustoms  $$NO
+		End
+		ExportGerber
+			OutFile $effn,  $eflayer
+			OutFile $fidfn, $fidlayer
+		End
+		ExportFormat "Gerber"
+			FlattenCustoms $$YES
+		End
+		ExportGerber
+			OutFile $scnfn, $scnlayer
+		End
+		GetValue "Process another Layer for eform? (0 to Stop)", $layer
+	End
+	SelectFilter
+		AddTypes 0
+	End
+	Undo $$YES
+ENDMACRO
+
+MACRO _ThicknessDialog
+	# Set Data Array
+	StrArray $Thick(2)
+		StrSet $Thick(1), "Less than 2 mils"
+		StrSet $Thick(2), "Over 2 mils"
+		Set $FormId  = -1
+	Set $Static1 = -1
+	Set $Radio1  = -1
+	Set $Button1 = -1
+	Set $Button2 = -1
+	Set $Button1Clicked = $$FALSE
+	Set $Button2Clicked = $$FALSE
+	Set $ThickSel = 2
+	# Set up form
+	DefineForm
+		FormId	$FormId
+		Title	"Material Thickness:"
+		Margin	0.25
+		StaticText		  	$Static1, 0.50, 0.00, 1.50, 0.25, "Choose Thickness:", $$TRUE
+		RadioButtonControls $Radio1 , 1.75, 0.35, 1.75, 0.50, 2, $Thick,  $ThickSel, $$FALSE
+		ButtonControl		$Button1, 0.75, 1.05, 1.00, 0.35, "OK", 	$Button1Clicked
+		ButtonControl		$Button2, 2.00, 1.05, 1.00, 0.35, "Cancel", $Button2Clicked
+	End
+	OpenForm $FormId
+	If $Button2Clicked
+		LogMessage 0, "_ThicknessDialog Macro Canceled."
+		Stop "_ThicknessDialog Macro Canceled."
+	End
+	Set $1 = $ThickSel
+ENDMACRO

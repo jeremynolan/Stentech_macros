@@ -1,0 +1,125 @@
+MACRO LayerPrepforStencils
+	####
+	# This macro was written to optimize the drawn pad conversion process for a         
+	# given solder or paste mask layer, solder or paste, keeping custom aps minimal  
+	# Removes Stacked Pads, converts drawn pads to flashes and converts custom apertures to intrinsics                              
+	# Written by Stan M. Keightley Jr. for WISE Software Solutions, Inc. May 2014       
+	# Current version 1.3 updated 10/24/24
+	####
+
+	UNDO $$NO
+
+	SET	$slayer = 0
+	SET	$tlayer = 0
+	SET	$Repeat = $$YES
+	SET 	$$STATUS = $$YES
+
+	REPEAT $$STATUS == $$YES
+		SET	$$STATUS = 0
+		REPEAT	$$STATUS == 0
+
+			GetValue   	"Enter Input Layer:", $layer
+			ActiveLayer	$layer
+
+		END
+		#CALLMACRO ConvertMixedPolarityLayer, $layer
+		GETEXTENTS $layer, $lx, $ly, $ux, $uy, $$YES, $$YES
+		SELECTGROUP
+			MODE	0
+			GO
+		END
+		SELECTGROUP
+
+			MODE	1
+			By $$WINDOWMODE
+			Boundary $$YES
+			FLASHES $$NO
+			DRAWS $$YES
+			ARCS $$YES
+			POLYS $$YES
+			TEXT $$YES
+			DRILLS $$YES
+			SLOTS $$YES
+			DRILLCIRCLES $$YES
+			DRILLTEXT $$YES
+			MILLPATHS $$YES
+			MILLCIRCLES $$YES
+			Layer $layer 
+			Dcode 0 # Move all D-codes
+			Tool 0 # Move all tools
+			Polarity 0
+			GO $lx,$ly,$ux,$uy
+		END
+
+		IF $$SELGRPCNT > 0
+
+			GETFREELAYER $slayer
+
+			MOVE
+				By $$GROUPMODE
+				Layer $layer # Move from all visible layers
+				TOLAYER $slayer
+				GO 0, 0, 0, 0
+			END
+			GETFREELAYER $tlayer
+			COMPOSITE2LAYER
+				CompositeLayer $slayer
+				ToLayer $tlayer
+				Method 0 # to polys
+				GO
+			END
+			AUTODRAWNPADS
+				ControlLayer $tlayer
+				PasteExpansion 0.002
+				Layer $tlayer
+				MaxSizeX 0.75
+				MaxSizeY 0.75
+				UseCustom $$YES
+				Tolerance 0.0002
+				ReplaceRotated $$NO
+				Window $$NO
+				GO
+			END
+			MOVE
+				By $$WINDOWMODE
+				Boundary $$YES
+				FLASHES $$YES
+				Layer $tlayer # Move from all visible layers
+				TOLAYER $layer
+				Dcode 0 # Move all D-codes
+				Tool 0 # Move all tools
+				Polarity 0
+				GO $lx,$ly,$ux,$uy, 0, 0, 0, 0
+			END
+			ERASE
+				Layer $slayer # Move from all visible layers
+				Dcode 0 # Move all D-codes
+				Tool 0 # Move all tools
+				Polarity 0
+				GO $lx,$ly,$ux,$uy
+			END
+			SELECTGROUP
+				MODE	0
+				GO
+			END
+		END
+		CUSTOMSTOINTRINSICS 1, $layer
+		CUSTOMSTOINTRINSICS 2, $layer
+		CUSTOMSTOINTRINSICS 3, $layer
+		ConsolidateCustoms
+		PADREMOVAL
+			TYPE "S" # stacked only
+			LAYER $layer
+			DCODE 0
+			WINDOWMODE $$NO
+			GO
+		END
+		GETYESNO "Convert Another?", $Repeat
+		IF $Repeat == $$NO
+			MESSAGEBOX "Source Layer Prep for Paste", "Prep Macro Finished", 0
+			SET 	$$STATUS = $$NO
+		END
+	END
+	UNDO $$YES
+ENDMACRO
+

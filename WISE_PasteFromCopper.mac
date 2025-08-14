@@ -1,0 +1,262 @@
+MACRO PasteFromCopper
+	#This macro is written to assist in the creation of a 1:1 Paste Layer from the copper layer
+	#Automatic convert Drawn Pads will be run if any mask layer is present
+	#Written by Stan Keightley 10/20/2015 Copy right WISE Software Solutions, Inc.
+	Set $tlayer = 0
+	Set $blayer = 0
+	Set $tplayer = 0
+	Set $bplayer = 0
+	Set $tmlayer = 0
+	Set $bmlayer = 0
+	SET $nclayer = 0
+	SET $TopYes = 0
+	SET $BotYes = 0
+	SET $flashes = $$NO
+	SET $prompt = $$YES
+	CALLMACRO Customs2SMT
+	CALLMACRO _GetLayer, $$LTTOP, $tlayer, $prompt
+	IF $tlayer != 0
+		SET $TopYes = $$YES
+		LAYERN $tlayer
+			TYPE $$LTTOP
+		END
+		CALLMACRO _GetLayer, $$LTPASTEMASKTOP, $tplayer, $prompt
+		IF $tplayer == 0
+			CALLMACRO _GetLayer, $$LTMASKTOP, $tmlayer, $prompt
+		END
+	END
+	CALLMACRO _GetLayer, $$LTBOTTOM, $blayer, $prompt
+	IF $blayer != 0
+		SET $BotYes = $$YES
+		LAYERN $blayer
+			TYPE $$LTBOTTOM
+		END
+		CALLMACRO _GetLayer, $$LTPASTEMASKBOT, $bplayer, $prompt
+		IF $bplayer == 0
+			CALLMACRO _GetLayer, $$LTMASKBOT, $bmlayer, $prompt
+		END
+	END
+	IF $BotYes == $$NO
+		IF $TopYes == $$NO
+			STOP "No Copper Layers Found! Cannot generate 1:1 paste without copper layers."
+		END
+	END
+	CALLMACRO _GetNCLyr, $nclayer
+	IF $tlayer !=0
+		IF $tplayer != 0
+			CALLMACRO _CDP, $tlayer, $tplayer
+		ELSE
+			IF $tmlayer != 0
+				CALLMACRO _CDP, $tlayer, $tmlayer
+			END
+		END
+		CALLMACRO _HasFlashes, $tlayer, $flashes
+		IF $flashes == $$NO
+			MESSAGEBOX "No Flashes on Top Layer!", "No Flashes were found on Top Layer, cannot create 1:1 paste for this layer.", 0
+			SET $TopYes = $$NO
+		ELSE
+			CALLMACRO ConvertMixedPolarityLayer, $tlayer
+		END
+	END
+	IF $blayer != 0
+		IF $bplayer != 0
+			CALLMACRO _CDP, $blayer, $bplayer
+		ELSE
+			IF $bmlayer != 0
+				CALLMACRO _CDP, $blayer, $bmlayer
+			END
+		END
+		CALLMACRO _HasFlashes, $blayer, $flashes
+		IF $flashes == $$NO
+			MESSAGEBOX "No Flashes on Bottom Layer!", "No Flashes were found on Bottom Layer, cannot create 1:1 paste for this layer.", 0
+			SET $BotYes = $$NO
+		ELSE
+			CALLMACRO ConvertMixedPolarityLayer, $blayer
+		END
+	END
+	CALLMACRO _ResetPaste
+	PASTEMASK
+		TopMask $TopYes
+		BottomMask $BotYes
+		MaxErrors 1000
+		IF $nclayer != 0
+			ThruDrillLayer $nclayer
+		END
+		Undersize 0
+		RoundCorners $$NO
+		AlignmentTolerance 0.001
+		FinePitchPads $$NO
+		IgnoreSmallPads $$YES
+		SmallPadThreshold 0.025
+		IgnoreSelectGroup $$NO
+		ConvertDrawnMaskLayer $$YES
+		FixErrors $$YES
+		GO $$PMGENERATE
+	END
+	CALLMACRO _ResetTypes, $tlayer, $blayer, $tplayer, $bplayer
+	MessageBox "Macro Finished", "Please carefully check your newly generated layers for accuracy before proceeding.", 0
+ENDMACRO
+MACRO Customs2SMT
+	COMPACTAPLIST $$YES
+	SET $dcode = 10
+	REPEAT $$STATUS == $$TRUE
+		GETDCODEINFO $dcode, $shp, $custom, $xs, $ys, 	$type, $usedcnt, $flags, $rot, $scratch
+		IF $shp == $$CUSTOM
+			SET $type = 1
+			PUTDCODEINFO
+		END
+		CALC $dcode = $dcode + 1
+	END
+ENDMACRO
+MACRO _ResetPaste
+	SET $5 = 0
+	SET $6 = 0
+	SET $prompt = $$NO
+	CALLMACRO _GetLayer, $$LTPASTEMASKTOP, $5, $prompt 
+	CALLMACRO _GetLayer, $$LTPASTEMASKBOT, $6, $prompt 
+	IF $5 != 0
+		LAYERN $5
+			TYPE $$LTOTHER
+		END
+	END
+	IF $6 != 0
+		LAYERN $6
+			TYPE $$LTOTHER
+		END
+	END
+ENDMACRO
+MACRO _ResetTypes
+	SET $5 = 0
+	SET $6 = 0
+	SET $prompt = $$NO
+	IF $1 != 0
+		LAYERN $1
+			TYPE $$LTOTHER
+		END
+	END
+	IF $2 != 0
+		LAYERN $2
+			TYPE $$LTOTHER
+		END
+	END
+	IF $3 != 0
+		LAYERN $3
+			TYPE $$LTOTHER
+		END
+	END
+	IF $4 != 0
+		LAYERN $4
+			TYPE $$LTOTHER
+		END
+	END
+	CALLMACRO _GetLayer, $$LTPASTEMASKTOP, $5, $prompt
+	CALLMACRO _GetLayer, $$LTPASTEMASKBOT, $6, $prompt
+	IF $5 != 0
+		LAYERN $5
+			TYPE $$LTTOP
+			LYRNAME "Top Paste From Copper"
+		END
+	END
+	IF $6 != 0
+		LAYERN $6
+			TYPE $$LTBOTTOM
+			LYRNAME "Bottom Paste From Copper"
+		END
+	END
+ENDMACRO
+MACRO _HasFlashes
+	#$1 = layer
+	#$2 = yesno
+	SET $Repeat = $$TRUE
+	GETFIRSTITEM $1, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+	REPEAT $Repeat == $$TRUE
+		IF $type == $$DBFLASH
+			SET $2 = $$YES
+			SET $Repeat = $$FALSE
+		END
+		GETNEXTITEM
+	END
+ENDMACRO
+MACRO _CDP
+	# $layer. $player
+	AUTODRAWNPADS
+		ControlLayer $2
+		PasteExpansion 0.004
+		Layer $1
+		MaxSizeX 0.75
+		MaxSizeY 0.75
+		UseCustom $$YES
+		Tolerance 0.0005
+		ReplaceRotated $$NO
+		Window $$NO
+		GO
+	END
+ENDMACRO
+MACRO _GetLayer
+	Set $Repeat = $$YES
+	ARRAY $layers($$MAXLAYERS)
+	SET $2 = 1
+	IF $1 == 0
+		STRSET $LT, "Top"
+	END
+	IF $1 == 2
+		STRSET $LT, "Bottom"
+	END
+	IF $1 == 9
+		STRSET $LT, "Top PasteMask"
+	END
+	IF $1 == 10
+		STRSET $LT, "Bottom PasteMask"
+	END
+	IF $1 == 7
+		STRSET $LT, "Top SolderMask"
+	END
+	IF $1 == 8
+		STRSET $LT, "Bottom SolderMask"
+	END
+	GETLAYER $2,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	Repeat $Repeat != $$NO
+		IF $type == $1
+			Set $Repeat = $$NO
+		ELSE
+			IF $2 == $$MAXLAYERS
+				SET $2 = 0
+				IF $3 == $$YES
+					STRWRITE $Lprompt, "Please enter %s layer number or 0 for none of this type.", $LT
+					GETVALUE $Lprompt, $2
+				END
+				IF $2 !=0
+					LAYERN $2
+						TYPE $1
+					END
+				END
+				CALC $2 = $2 - 1
+				Set $Repeat = $$NO
+			END
+			CALC $2 = $2 + 1
+			GETLAYER $2,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		END
+	END
+ENDMACRO
+MACRO _GetNCLyr
+	Set $Repeat = $$YES
+	SET $1 = 1
+	GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	Repeat $Repeat != $$NO
+		IF $type == $$LTNC
+			Set $Repeat = $$NO
+			LAYERN $1
+				FLASHCOLOR "darkslategrey"
+				DRAWCOLOR "darkslategrey"
+			END
+		ELSE
+			IF $1 == $$MAXLAYERS
+				MESSAGEBOX "NC Layer not found", "No NC layer found to assist in determining which pads are vias, please check your results carefully.", 0
+				Set $Repeat = $$NO
+				SET $1 = -1
+			END
+			CALC $1 = $1 + 1
+			GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		END
+	END
+ENDMACRO

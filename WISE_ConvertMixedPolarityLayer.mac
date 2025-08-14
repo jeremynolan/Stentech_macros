@@ -1,0 +1,35 @@
+MACRO ConvertMixedPolarityLayer
+	SET $tlayer = 0
+	SET $layer = 1
+	IF $$CALLDEPTH == 1
+		SET $layer = $1
+	ELSE
+		GETVALUE "Enter Layer to Process:", $layer
+	END
+	GETLAYER $layer, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	IF $polarity == 2
+		CALLMACRO _GetFirstEmptyLayer, $tlayer
+		COPYLAYER $layer, $tlayer
+		ERASE
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes $$YES
+			Draws $$YES
+			Arcs $$YES
+			Drills $$YES
+			Slots $$YES
+			Layer $layer 
+			Dcode 0 # Erase all D-codes
+			Tool 0 # Erase all tools
+			Polarity 0
+			GO $lx,$ly,$ux,$uy
+		END
+		COMPOSITE2LAYER
+			CompositeLayer $tlayer
+			ToLayer $layer
+			Method 1 #Analyze
+			GO
+		END
+		DELETELAYER $tlayer
+	END
+ENDMACRO

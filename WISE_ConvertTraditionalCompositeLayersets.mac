@@ -1,0 +1,38 @@
+MACRO AllCompositesToLayers
+	#####################################################################
+	# This macro converts all composite layer sets to normal layers                                #
+	# Version 1.0 Written by Stan Keightley, WISE Software Solutions on May 8, 2014   #
+	####################################################################
+	SET $newlayer = 0
+	ARRAY $layerArray(50)
+	GETFIRSTLAYERSET $name, $type, $properties, $layerCount
+	REPEAT $$STATUS != $$FALSE
+		IF $type == 4
+			SET $index = 1
+			GETFREELAYER $newlayer
+			GETFIRSTLAYERSETLAYERNUMBER $layer
+			GETLAYER $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+			REPEAT $$STATUS != $$FALSE
+				SET $layerArray($index) = $layer
+				CALC $index = $index + 1
+				GETNEXTLAYERSETLAYERNUMBER
+			END
+			Calc $indexmax = $index
+			COMPOSITE2LAYER
+				CompositeLayer $layer
+				ToLayer $newlayer
+				Method 1 # Let the system determine the best method.
+				GO
+			END
+			LAYERN $newlayer # set this layer’s info
+				LYRNAME $ln
+			END
+			SET $index = 1
+			REPEAT $index < $indexmax
+				DELETELAYER $layerArray($index)
+				CALC $index = $index + 1
+			END
+		END
+		GETNEXTLAYERSET
+	END
+ENDMACRO

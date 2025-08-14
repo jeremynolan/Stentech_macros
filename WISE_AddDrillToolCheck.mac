@@ -1,0 +1,71 @@
+MACRO WISE_AddDrillToolCheck
+	# This macro written to place a series of drills representing each tool used in the design. 
+	# This macro should be run after optimization so that these drills are performed last on the machine 
+	# and can be used to verify that no tools were broken during the drilling of the current board/panel.
+	# Current Version 1.0 written by Stan Keightley Jr. on 2-17-2017
+	#Copyright 2017 WISE Software Solutions, Inc.
+
+	#Get Tools
+	SET $NC = 1
+	CALLMACRO _GetNCLyr, $NC
+	IF $NC !=0
+		ACTIVELAYER $NC
+		SET $tool = 1
+		ARRAY $tools(99)
+		ARRAY $sizes(99)
+		REPEAT $tool <= 99
+			GETNCTOOLDESIGNDATA $tool, $size, $type, $usage, $legend, $mask, $pilot, $export, $color, $pattern
+			IF $$STATUS == $$TRUE
+				SET $tools($tool) = $tool
+				SET $sizes($tool) = $size
+				SET $cnt = $tool
+			END
+			CALC $tool = $tool + 1
+		END
+		GETLISTCHOICE "Choose orientation of drill pattern:", $choice, "Horizontal", "Vertical"
+		STRCMP $choice, "Horizontal"
+		IF $$STATUS == 0 #They chose H
+			SET $tool = 1
+			GETPOINT "Enter Start coordinate of drill check pattern:", $x, $y
+			REPEAT $tool <= $cnt
+				CURRENTDRILLTOOL $tools($tool)
+				ADDDRILL $x, $y
+				CALC $x = $x + $sizes($tool)
+				CALC $tool = $tool + 1
+				CALC $x = $x + $sizes($tool)
+			END
+		ELSE #They chose V
+			SET $tool = 1
+			GETPOINT "Enter Start coordinate of drill check pattern:", $x, $y
+			REPEAT $tool <= $cnt
+				CURRENTDRILLTOOL $tools($tool)
+				ADDDRILL $x, $y
+				CALC $y = $y + $sizes($tool)
+				CALC $tool = $tool + 1
+				CALC $y = $y + $sizes($tool)
+			END
+		END
+
+	END
+
+ENDMACRO
+
+
+ENDMACRO
+MACRO _GetNCLyr
+	Set $Repeat = $$YES
+	SET $1 = 1
+	GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	Repeat $Repeat != $$NO
+		IF $type == $$LTNC
+			Set $Repeat = $$NO
+		ELSE
+			IF $1 == $$MAXLAYERS
+				SET $1 = -1
+				Set $Repeat = $$NO
+			END
+			CALC $1 = $1 + 1
+			GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		END
+	END
+ENDMACRO

@@ -1,0 +1,35 @@
+# This macro copies the selected data according to the step and repeat values entered.
+# Current version written by Stan Keightley Jr., Copyright 1998-2015 WISE Software Solutions, Inc.
+MACRO QuickPanel
+
+	SET	$mmconv = 0.03937008
+
+	GETLISTCHOICE "Enter Image to Image offsets using:", $units, "Inches", "MM"
+	GetValue		"Enter point-to-point X spacing", $tx
+	GetValue		"Enter point-to-point Y spacing", $ty
+	GetValue		"Enter number of copies in X", $cx
+	GetValue		"Enter number of copies in Y", $cy
+	STRCMP $units, "MM"
+	IF $$STATUS == 0
+		Calc $tx = $tx* $mmconv 
+		Calc $ty = $ty* $mmconv 
+	END
+
+	SELECTFILTER
+		BY  $$WINDOWMODE
+		BOUNDARY $$YES
+		ADDTYPES 0
+		DCODE  0
+		POLARITY 0
+	END
+	MESSAGEBOX "WISE Quick Panel Macro", "Ensure all layers with data to be panelized are visible, then window around the data to be panelized.", 0
+	PANELIZE
+		ROWS $cy
+		COLS $cx
+		TABSIZE $tx, $ty
+		AUTOVENT $$NO
+		AUTOPANEL $$NO
+		#DOCUMENT "panel.out"
+		GO # no values specified, so query user.
+	END
+END

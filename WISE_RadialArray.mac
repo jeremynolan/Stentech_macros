@@ -1,0 +1,103 @@
+MACRO AddRadialPlacements
+	#This macro is intended to place flashes around the perimeter of a circle on a given layer.
+	#The only data on the given layer should be a circle
+	SET $Layer = $$ACTIVELAYER
+	SET $Pitch = 1.5
+	GETVALUE "Enter the Layer # that has the circle to process:", $Layer
+	GETVALUE "Enter the desired pitch in inches:", $Pitch
+	GETEXTENTS $Layer, $lx, $ly, $ux, $uy, $$YES, $$YES
+	SET $ctrX = 0
+	SET $ctrY = 0
+	CALLMACRO _GetCenter, $Layer, $ctrX, $ctrY
+	CALC $Diameter = $ux - $lx
+
+	# Given:
+	#             $Diameter = diameter of circle
+	#             $Pitch = desired pitch
+	#             $CenterX = X of the center of circle
+	#             $CenterY = Y of the center of the circle
+	# Compute circumference of the circle
+	CALC $Circumference = 3.14159 * $Diameter
+
+	# Compute the number of elements that will fit at the specified pitch
+	FLOOR $NumElements = $Circumference / $Pitch
+
+	# Compute the angle between elements
+	CALC $AngleBetween = 360.0 / $NumElements
+
+	# Create the base dcode
+	SET $BaseDCode = 10
+	GETVALUE "Enter the DCode # to use:", $BaseDCode 
+	GETDCODEINFO $BaseDCode, $shp, $custom, $xs, $ys, $type, $usedcnt, $flags, $rot, $scratch
+	IF $rot == 0
+		CALC $yoffset = $ys / 2
+	END
+	IF $rot == 90
+		CALC $yoffset = $xs / 2
+	END
+	IF $rot == 180
+		CALC $yoffset = $ys / 2
+	END
+	IF $rot == 270
+		CALC $yoffset = $xs / 2
+	END
+	#Calculate the start point
+	CALC $StartX = $ctrX
+	CALC $Rad = $Diameter / 2
+	CALC $StartY = $ctrY + $Rad
+	CALC $StartY = $StartY + $yoffset
+
+	# Add the initial flash
+	ACTIVELAYER $Layer
+	CURRENTDCODE $BaseDCode
+	ADDFLASH $StartX, $StartY
+
+	# Repeat as many times as needed
+	SET $CurrentAngle = $AngleBetween
+	SET $dcode = 10
+	REPEAT $CurrentAngle < 360.0
+		# Increment the current angle
+		CALC $CurrentAngle = $CurrentAngle + $AngleBetween
+		# Copy the BaseDCode
+		#$DCode = Copy $BaseDCode
+		CALLMACRO _GetFirstBlankDcode, $dcode
+		PUTDCODEINFO $dcode, $shp, $custom, $xs, $ys, $type, $usedcnt, $flags, $rot, $scratch
+		CURRENTDCODE $dcode 
+
+		# Add the flash
+		ADDFLASH $StartX, $StartY
+
+		ROTATE
+			DEGREES $AngleBetween
+			CENTERED $$NO
+			BY $$WINDOWMODE
+			BOUNDARY $$YES
+			FLASHES $$YES
+			DRAWS $$NO
+			ARCS $$NO
+			POLYS $$NO
+			TEXT $$NO
+			DRILLS $$NO
+			SLOTS $$NO
+			DRILLCIRCLES $$NO
+			DRILLTEXT $$NO
+			MILLPATHS $$NO
+			MILLCIRCLES $$NO
+			LAYER $Layer
+			DCODE 0
+			TOOL 0
+			GO $lx,$ly,$ux,$uy, $ctrX, $ctrY
+		END
+	END
+	ADDFLASH $StartX, $StartY
+ENDMACRO
+MACRO _GetCenter
+	GETEXTENTS $1, $lx, $ly, $ux, $uy
+	CALC $tmp = $ux - $lx
+	CALC $tmp = $tmp / 2.0
+	CALC $2 = $lx + $tmp
+
+	CALC $tmp = $uy - $ly
+	CALC $tmp = $tmp / 2.0
+	CALC $3 = $ly + $tmp
+END

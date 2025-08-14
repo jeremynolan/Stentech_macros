@@ -1,0 +1,598 @@
+MACRO OnStartup
+	# Macro OnStartup Written by Robbie Devennie on 2024-02-01
+	# Macro OnStartup Converted to Stentech by Jeremy Nolan on 2025-28-07
+	LogMessage 0, "OnStartup Macro Called"
+	Undo $$NO
+	# Log message cannot create a local variable until all globals are set
+	# Set Startup Global Variables Top
+	# This must be the first macro to run in the flow.
+	StrSetGlobal $gMacroVersion  , "1.1.29" # Note the version number of the macros used. This is logged on all exported gerber files.
+	SetGlobal    $gCADmatic      = $$NO  # Is CADmatic 0 No, 1 Yes
+	SetGlobal    $gTbf           = 0     # Text block File
+	SetGlobal    $gThickT        = 5     # Stencil Thickness in Mils
+	SetGlobal    $gThickB        = 5     # Stencil Thickness in Mils
+	SetGlobal    $gSilkT         = 1     # Top Silk
+	SetGlobal    $gOrigPasteT    = 2     # Original Paste Top
+	SetGlobal    $gModPasteT     = 3     # Modified Paste Top
+	SetGlobal    $gBorderT       = 4     # Border Top
+	SetGlobal    $gSilkB         = 5     # Bottom Silk
+	SetGlobal    $gOrigPasteB    = 6     # Original Paste Bottom
+	SetGlobal    $gModPasteB     = 7     # Modified Paste Bottom
+	SetGlobal    $gBorderB       = 8     # Bottom Border
+	SetGlobal    $gNCDrill       = 9     # NC Drill Layer
+	SetGlobal    $gCheckPlotT    = 10    # Check Plot Top
+	SetGlobal    $gCheckPlotB    = 11    # Check Plot Bottom
+	SetGlobal    $gCutT          = 12    # Laser Cut Top
+	SetGlobal    $gCutB          = 13    # Laser Cut Bottom
+	SetGlobal    $gEngraveT      = 14    # Engrave Top
+	SetGlobal    $gEngraveB      = 15    # Engrave Bottom
+	SetGlobal    $gFidT          = 16    # Fiducial Top
+	SetGlobal    $gFidB          = 17    # Fiducial Bottom
+	SetGlobal    $gTxtT          = 18    # Text Top
+	SetGlobal    $gTxtB          = 19    # Text Bottom
+	SetGlobal    $gCopperT       = 20    # Top Copper Layer
+	SetGlobal    $gSolderMaskT   = 21    # Solder Mask Top
+	SetGlobal    $gCopperB       = 22    # Bottom Copper
+	SetGlobal    $gSolderMaskB   = 23    # Solder Mask Bottom
+	SetGlobal    $gDrawing       = 24    # Drill Drawing
+	SetGlobal    $gTxtOut20T     = 25    # Top    .20 (Text and Oultine)
+	SetGlobal    $gTxtOut20B     = 26    # Bottom .20 (Text and Oultine)
+	SetGlobal    $gSizePlotT     = 27    # Size plot Top
+	SetGlobal    $gSizePlotB	 = 28    # Size plot Bottom
+	SetGlobal    $gLMDT			 = 29 	 # LMD Top Layer
+	SetGlobal    $gLMDB			 = 30 	 # LMD Bottom Layer
+	SetGlobal    $gUntouchPasteT = 31    # Untouched Paste Top
+	SetGlobal    $gUntouchPasteB = 32    # Untouched Paste Bottom
+	SetGlobal    $gNSGLayerT	 = 33    # NSG Top File Layer number
+	SetGlobal    $gNSGLayerB	 = 34    # NSG Bottom File Layer number
+	SetGlobal    $gAlignT  		 = 35 	 # Alignment Layer Top
+	SetGlobal    $gAlignB  		 = 36 	 # Alignment Layer Bottom
+	SetGlobal    $gNCDrillB      = 37    # NC Drill Layer (Mirrored for Bottom reference)
+	SetGlobal    $gLayersPicked  = 0     # Remember If Layer Setup is already done
+	SetGlobal    $gSavedDSN      = 0     # Don't start from the beginning on saved Designs
+	SetGlobal    $gComboYesNo    = $$NO  # Initialize combo yes no to no
+	SetGlobal    $gPasteLayers   = 0     # Initialize paste layers to 0
+	SetGlobal    $gNoLib         = $$NO  # Initialize no lib to no
+	SetGlobal    $gCropLength    = 0.5   # Initialize crop Length to 0.5
+	SetGlobal    $gAR            = 0.6   # Initialize ar to 0.6
+	SetGlobal    $gTwoPinEdits   = $$YES # Initialize Check for two pin directional edits to yes
+	SetGlobal    $gMoveTextBlock = $$NO  # Initialize Move Text block to no
+	SetGlobal    $gHasDrillLayer = $$NO  # Initialize has Drill Layer to no
+	StrSetGlobal $gCropInOut     , ""
+	StrSetGlobal $gMinDim        , ""
+	StrSetGlobal $gMinPitch      , ""
+	StrSetGlobal $gCustomer      , ""
+	StrSetGlobal $gJobNumT       , ""
+	StrSetGlobal $gJobNumB       , ""
+	StrSetGlobal $gPartNumT      , ""
+	StrSetGlobal $gPartNumB      , ""
+	StrSetGlobal $gShapeSet      , ""
+	StrSetGlobal $gShapeSetB     , ""
+	StrSetGlobal $gCPTName       , ""
+	StrSetGlobal $gCPBName       , ""
+	StrSetGlobal $gMatT          , ""
+	StrSetGlobal $gMatB          , ""
+	StrSetGlobal $gDir           , ""
+	StrSetGlobal $gMaster        , "" # Set by Stentech_Config.txt # Master Library .VCAM Directory (with companyList.txt and /vcam files for each company listed)
+	StrSetGlobal $gWorking       , "" # Set by Stentech_Config.txt # Master Working Directory (with company folders for each company listed in company list)
+	StrSetGlobal $gFrames        , "" # Set by Stentech_Config.txt # Master Frames  Directory (with Frame_List.txt and gerber files for each frame listed)
+	StrSetGlobal $gNet           , "" # Set by Stentech_Config.txt # Network Directory optional additional folder for output files
+	StrSetGlobal $gNetYN         , "" # Set by Stentech_Config.txt # Network Directory Yes or No
+	StrSetGlobal $gFrame         , "" #
+	StrSetGlobal $gProcessT      , "" #
+	StrSetGlobal $gProcessB      , "" #
+	StrSetGlobal $gCoatT         , "" #
+	StrSetGlobal $gCoatB         , "" #
+	StrSetGlobal $gFontM         , "" # Font for Marked   Text Set by Stentech_Config.txt (Tahoma)
+	StrSetGlobal $gFontE         , "" # Font for Engraved Text Set by Stentech_Config.txt (Stroke-Stencil)
+	StrSetGlobal $gFontC         , "" # Font for Cut-thru Text Set by Stentech_Config.txt (Stroke-Stencil)
+	StrSetGlobal $gOp            , "" # Operator Initials
+	StrSetGlobal $gTextMode      , ""
+	StrSetGlobal $gMirrorText    , "" # Set by Stentech_Config.txt
+	StrSetGlobal $gLeadFree      , ""
+	StrSetGlobal $gPrinterChoice , ""
+	StrSetGlobal $gFidType       , ""
+	StrSetGlobal $gDateISO       , "Date Error"
+	StrSetGlobal $gCompany       , "Stentech"
+	StrSetGlobal $gExportType    , "Squeegee"
+
+	CALLMACRO _GetISODate, $gDateISO # Get the current date in ISO Format
+	LogMessage 0, "Global variables set"
+	StrWrite $log, "OnStartup Macro finished %s", $$TIME
+	LogMessage 0, $log
+	SelectViewTab "Main"
+	Undo $$YES
+	CALLMACRO StentechAutomationStartup
+ENDMACRO
+
+MACRO StentechAutomationStartup
+    Undo $$NO
+	# Local variables cannot be set prior to Global variables.
+	StrWrite $log, "StentechAutomationStartup Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	GetAppDataFolder $folder # This line grabs the current data Folder that VCam is using Typically C:\ProgramData\WISE Software Solutions\VisualCAM ##.#  and saves that as a string to the variable $folder
+	StrWrite $config, 	  "%s\\macros\\ReferenceFiles\\Stentech_Config.txt", $folder
+	StrWrite $userConfig, "%s\\macros\\ReferenceFiles\\Stentech_user.txt", $folder
+	# Read Configuration File
+	StrSet $read, ""
+	FileOpen $fid, $config, "r"
+	If $$STATUS != 0
+		FileRead  $fid, "", $gMaster  # 1 Master Library .vcam Directory (with Company_List.txt and vcam files for each company listed)
+		FileRead  $fid, "", $gWorking # 2 Master Working Directory (with company folders for each company listed in company list)
+		FileRead  $fid, "", $gFrames  # 3 Master Frames  Directory (with Frame_List.txt and gerber files for each frame listed)
+		FileRead  $fid, "", $gNet     # 4
+		FileRead  $fid, "", $gNetYN   # 5
+		FileRead  $fid, "", $gFontM   # 6 Font for Marked   Text Set by Stentech_Config.txt
+		FileRead  $fid, "", $gFontE   # 7 Font for Engraved Text Set by Stentech_Config.txt
+		FileRead  $fid, "", $gFontC   # 8 Font for Cut Thru Text Set by Stentech_Config.txt
+		FileClose $fid
+	Else
+		StrWrite $log, "Failed to read configuration file at\r\r%s\r\r(ID:001)", $config
+		LogMessage 0, $log
+		Stop $log
+	End
+	# Read User File
+	StrSet $read, ""
+	FileOpen $fUserID, $userConfig, "r"
+	If $$STATUS != 0
+		FileRead $fUserID, "", $gOp	# Get user name from Stentech_user.txt
+		FileClose $fUserID
+	Else
+		StrWrite $log, "Failed to read user file at\r\r%s\r\r(ID:002)", $userConfig
+		LogMessage 3, $log
+	End
+	StrCmp $gOp, "cadmatic"
+	If $$STATUS == 0
+		Set $gCADmatic = $$YES
+		SelectViewTab "Log"
+	Else
+		Set $gCADmatic = $$NO
+	End
+	StrLoc $$DSNNAME, "untitled.vcam" # test to see if this is a new workspace
+	If $$STATUS > 0
+		# Set companyList path
+		StrWrite $companyList, "%sCompany_List.txt", $gMaster 
+		# Read list of Company names for number in list
+		Set $cnt = 1
+		StrSet $readToken, "%s"
+		CALLMACRO _GetListLength, $companyList, $cnt, $readToken # $1 = $filename, $2 = $cnt, $3 = $readToken
+		Calc $lines = $cnt
+		StrArray $companyNames($cnt)
+		Set $cnt = 1
+		FileOpen $fid, $companyList, "r"
+		If $$STATUS != 0
+			Repeat $cnt < $lines  # Avoid bogus last line with <
+				FileRead $fid, $readToken, $companyNames($cnt)
+				Calc $cnt = $cnt + 1
+			End
+			FileClose $fid
+		Else
+			StrWrite $log, "Failed to read company list at\r\r%s\r\rPlease check that Datto is running properly and loaded on the M: drive. (ID:004)", $companyList
+			LogMessage 3, $log
+			Stop $log
+		End
+		FileClose $fid
+		# Set Materials array for form
+		StrArray $materialArray(4)
+			StrSet $materialArray(1), "PHD"
+			StrSet $materialArray(2), "Fine Grain"
+			StrSet $materialArray(3), "Nickel"
+			StrSet $materialArray(4), "Other"
+			# Set Process Array
+		StrArray $processArray(6)
+			StrSet $processArray(1), "Laser Cut"
+			StrSet $processArray(2), "LaserSTEP"
+			StrSet $processArray(3), "Chemetch Step"
+			StrSet $processArray(4), "Electroform"
+			StrSet $processArray(5), "Electroform Step"
+			StrSet $processArray(6), "Milled Step"
+			#StrSet $processArray(7), "MLAb"
+			# Set Coatings Array
+		StrArray $coatingArray(5)
+			StrSet $coatingArray(1), "None"
+			StrSet $coatingArray(2), "Nano Wipe"
+			StrSet $coatingArray(3), "NanoSlic"
+			StrSet $coatingArray(4), "Advanced Nano"
+			StrSet $coatingArray(5), "BluPrint"
+			# Set LeadFree Array
+		StrArray $leadFreeArray(2)
+			StrSet $leadFreeArray(1), "Yes"
+			StrSet $leadFreeArray(2), "No"
+			# Set Text Array
+		StrArray $textArray(5)
+			StrSet $textArray(1), "Label"
+			StrSet $textArray(2), "Engraved (contact)"
+			StrSet $textArray(3), "Engraved (squeegee)"
+			StrSet $textArray(4), "Cut-Thru"
+			StrSet $textArray(5), "Marked"
+			# Set Data Array
+		StrArray $dataArray(3)
+			StrSet $dataArray(1), "Gerber"
+			StrSet $dataArray(2), "ODB++"
+			StrSet $dataArray(3), "IPC-2581"
+			# Set Fid Type Array
+		StrArray $fidTypeArray(4)
+			StrSet $fidTypeArray(1), "Board"
+			StrSet $fidTypeArray(2), "Squeegee"
+			StrSet $fidTypeArray(3), "Both"
+			StrSet $fidTypeArray(4), "Cut-Thru"
+			# Read list of Frames
+		StrWrite $frameList, "%sFrame_List.txt", $gFrames
+		Set 	 $cnt = 1
+		StrSet $readToken, "%s"
+		CALLMACRO _GetListLength, $frameList, $cnt, $readToken
+		StrArray $frames($cnt)
+		Set $line = 1
+		StrSet $content, ""
+		FileOpen $fid, $frameList, "r"
+		If $$STATUS != 0
+			Repeat $line < $cnt  # Avoid bogus last line with <
+				If $$STATUS != 0
+					FileRead $fid, $readToken, $frames($line)
+					Calc $line = $line + 1
+				End
+			End
+			FileClose $fid
+		Else
+			StrWrite $log, "Failed to read file at\r\r%s", $frameList
+			LogMessage 3, $log
+			Stop $log
+		End
+		StrWrite $thickT, "%.1n", $gThickT
+		StrWrite $thickB, "%.1n", $gThickB
+		Set $FormId         = -1
+		Set $Drop1          = -1
+		Set $Drop2          = -1
+		Set $Drop3          = -1
+		Set $Drop4          = -1
+		Set $Drop5          = -1
+		Set $Drop6          = -1
+		Set $Drop7          = -1
+		Set $Drop8          = -1
+		Set $Drop9          = -1
+		Set $Drop10         = -1
+		Set $Edit1          = -1
+		Set $Edit2          = -1
+		Set $Edit3          = -1
+		Set $Edit4          = -1
+		Set $Edit5          = -1
+		Set $Edit6          = -1
+		Set $Edit7          = -1
+		Set $Radio1         = -1
+		Set $Radio2         = -1
+		Set $Radio3         = -1
+		Set $Radio4         = -1
+		Set $Radio5         = -1
+		Set $Static1        = -1
+		Set $Static10       = -1
+		Set $Static11       = -1
+		Set $Static12       = -1
+		Set $Static13       = -1
+		Set $Static14       = -1
+		Set $Static15       = -1
+		Set $Static16       = -1
+		Set $Static17       = -1
+		Set $Static18       = -1
+		Set $Static2        = -1
+		Set $Static3        = -1
+		Set $Static4        = -1
+		Set $Static5        = -1
+		Set $Static6        = -1
+		Set $Static7        = -1
+		Set $Static8        = -1
+		Set $Static9        = -1
+		Set $CoatDropSel    = 1
+		Set $CoatDropSelB   = 1
+		Set $CustDropSel    = 1
+		Set $dataDropSel    = 1
+		Set $fidTypeDropSel = 1
+		Set $FrameDropSel   = 1
+		Set $LeadDropSel    = 2
+		Set $MatDropSel     = 1
+		Set $MatDropSelB    = 1
+		Set $ProcDropSel    = 1
+		Set $ProcDropSelB   = 1
+		Set $TxtDropSel     = 1
+		Set $OKBtn        	= -1
+		Set $CancelBtn      = -1
+		Set $OKBtnClicked 	= $$FALSE
+		Set $CancelBtnClicked = $$FALSE
+		StrWrite $dialogTitle, "Job Information    V-%s - %s", $gMacroVersion, $gCompany
+		DefineForm
+			FormId	$FormId
+			Title	$dialogTitle
+			Margin	0.4
+			StaticText			$Static1,  	0.25, 0.00, 2.0, 0.25, "Customer:",                $$FALSE
+			StaticText			$Static2,  	0.25, 0.35, 2.0, 0.25, "Job Number (Top):",        $$FALSE
+			StaticText			$Static3,  	0.25, 0.70, 2.0, 0.25, "Job Number (Bottom):",     $$FALSE
+			StaticText			$Static4,  	0.25, 1.05, 2.0, 0.25, "Customer Part #(Top):",    $$FALSE
+			StaticText			$Static5,  	0.25, 1.40, 2.0, 0.25, "Customer Part #(Bottom):", $$FALSE
+			StaticText			$Static6,  	0.25, 1.75, 2.0, 0.25, "Thickness (Top)(mil):",    $$FALSE
+			StaticText			$Static7,  	0.25, 2.10, 2.0, 0.25, "Thickness (Bottom)(mil):", $$FALSE
+			StaticText		  	$Static8,  	0.25, 2.45, 2.0, 0.25, "Material (Top):",          $$FALSE
+			StaticText		  	$Static9,  	0.25, 2.80, 2.0, 0.25, "Material (Bottom):",       $$FALSE
+			StaticText		  	$Static10, 	0.25, 3.15, 2.0, 0.25, "Process (Top):",           $$FALSE
+			StaticText		  	$Static11, 	0.25, 3.50, 2.0, 0.25, "Process (Bottom):",        $$FALSE
+			StaticText		  	$Static12, 	0.25, 3.85, 2.0, 0.25, "Coating (Top):",           $$FALSE
+			StaticText		  	$Static13, 	0.25, 4.20, 2.0, 0.25, "Coating (Bottom):",        $$FALSE
+			StaticText		  	$Static14, 	0.25, 4.55, 2.0, 0.25, "Lead Free?",               $$FALSE
+			StaticText		  	$Static15, 	0.25, 4.90, 2.0, 0.25, "Frame:",                   $$FALSE
+			StaticText		  	$Static16, 	0.25, 5.25, 2.0, 0.25, "Text Process:",            $$FALSE
+			StaticText		  	$Static17, 	0.25, 5.60, 2.0, 0.25, "Fid Type:",                $$FALSE
+			StaticText		  	$Static18, 	0.25, 5.95, 2.0, 0.25, "Operator:",                $$FALSE
+			DropListControl		$Drop1,    	2.25, 0.00, 4.0, 0.25, $companyNames, $CustDropSel
+			EditControl	  		$Edit1,    	2.25, 0.35, 4.0, 0.25, $gJobNumT
+			EditControl	  		$Edit1,    	2.25, 0.70, 4.0, 0.25, $gJobNumB
+			EditControl	  		$Edit2,    	2.25, 1.05, 4.0, 0.25, $gPartNumT
+			EditControl	  		$Edit4,    	2.25, 1.40, 4.0, 0.25, $gPartNumB
+			EditControl	  		$Edit3,    	2.25, 1.75, 4.0, 0.25, $thickT
+			EditControl	  		$Edit5,    	2.25, 2.10, 4.0, 0.25, $thickB
+			DropListControl	  	$Drop2,    	2.25, 2.45, 4.0, 0.50, $materialArray, $MatDropSel
+			DropListControl	  	$Drop3,    	2.25, 2.80, 4.0, 0.50, $materialArray, $MatDropSelB
+			DropListControl	  	$Drop4,    	2.25, 3.15, 4.0, 1.50, $processArray, $ProcDropSel
+			DropListControl	  	$Drop5,    	2.25, 3.50, 4.0, 1.50, $processArray, $ProcDropSelB
+			DropListControl     $Drop8,   	2.25, 3.85, 3.9, 0.25,  $coatingArray,  $CoatDropSel,    $$FALSE, $$TRUE
+			DropListControl     $Drop9,   	2.25, 4.20, 3.9, 0.25,  $coatingArray,  $CoatDropSelB,   $$FALSE, $$TRUE
+			RadioButtonControls	$Radio1,   	2.25, 4.55, 2.6, 0.25, 2, $leadFreeArray, $LeadDropSel,    $$FALSE, $$TRUE
+			DropListControl	  	$Drop6,    	2.25, 4.90, 4.0, 1.50, 	  $frames, 		  $FrameDropSel
+			DropListControl	  	$Drop7,    	2.25, 5.25, 4.0, 1.50, 	  $textArray, 	  $TxtDropSel
+			#RadioButtonControls	$Radio4,   	2.25, 5.25, 4.0, 0.25, 4, $textArray, 	  $TxtDropSel, 	   $$FALSE, $$TRUE
+			RadioButtonControls	$Radio5,   	2.25, 5.60, 4.0, 0.25, 4, $fidTypeArray,  $fidTypeDropSel, $$FALSE, $$TRUE
+			EditControl			$Edit6,    	2.25, 5.95, 4.0, 0.25, $gOp
+			ButtonControl	  	$OKBtn,  	0.75, 6.60, 2.0, 0.50, "OK", 	 $OKBtnClicked
+			ButtonControl	  	$CancelBtn, 3.50, 6.60, 2.0, 0.50, "Cancel", $CancelBtnClicked
+			# StaticText		  	$Static17, 	0.50, 5.60, 2.0, 0.25, "Data Source:", $$FALSE
+			# RadioButtonControls	$Radio5,   	2.25, 5.60, 3.5, 0.25, 3, $dataArray, $dataDropSel, $$FALSE, $$TRUE
+		End
+		StrWrite $log, "$gOp=%s", $gOp
+		LogMessage 0, $log
+		If $gCADmatic
+			# Read Job File
+			StrSet $read, ""
+			StrSet $cadmaticJobInfo, "C:\\CADmatic\\JobInfo.cmt"
+			FileOpen $fid, $cadmaticJobInfo, "r"
+			If $$STATUS != 0
+				FileRead  $fid, "", $gCustomer
+				FileRead  $fid, "", $gJobNumT
+				FileRead  $fid, "", $gJobNumB
+				FileRead  $fid, "", $gPartNumT
+				FileRead  $fid, "", $gPartNumB
+				FileRead  $fid, "", $thickT
+				FileRead  $fid, "", $thickB
+				FileRead  $fid, "", $gMatT
+				FileRead  $fid, "", $gMatB
+				FileRead  $fid, "", $gProcessT
+				FileRead  $fid, "", $gProcessB
+				FileRead  $fid, "", $gCoatT
+				FileRead  $fid, "", $gCoatB
+				FileRead  $fid, "", $gLeadFree
+				FileRead  $fid, "", $gFrame
+				FileRead  $fid, "", $gTextMode
+				FileRead  $fid, "", $gFidType
+				FileClose $fid
+			Else
+				StrWrite $log, "Failed to read configuration file at\r\r%s\r\r(ID:005)", $cadmaticJobInfo
+				LogMessage 0, $log
+				Stop $log
+			End
+		Else
+			OpenForm $FormId
+			If $OKBtnClicked == $$FALSE
+				StrWrite $log, "Macro Cancelled. (ID:006)"
+				LogMessage 3, $log
+				Stop $log
+			End
+			FileOpen $fUserID, $userConfig, "w"
+			If $$STATUS != 0
+				FileWrite $fUserID, "%s", $gOp	# Write user name to Stentech_user.txt
+				FileClose $fUserID
+			Else
+				LogMessage 3, "Failed to write to User File."
+			End
+			StrSet $gCustomer, 	$companyNames($CustDropSel)
+			StrSet $gMatT, 		$materialArray($MatDropSel)
+			StrSet $gMatB, 		$materialArray($MatDropSelB)
+			StrSet $gProcessT,	$processArray($ProcDropSel)
+			StrSet $gProcessB,	$processArray($ProcDropSelB)
+			StrSet $gCoatT,		$coatingArray($CoatDropSel)
+			StrSet $gCoatB,		$coatingArray($CoatDropSelB)
+		End
+
+		PutDesignProperty "Material:",		$gMatT
+		PutDesignProperty "MaterialB:",		$gMatB
+		PutDesignProperty "Customer:",		$gCustomer # properites held in project as key value pairs
+		PutDesignProperty "JobNum:",		$gJobNumT
+		PutDesignProperty "JobNumB:",		$gJobNumB
+		PutDesignProperty "Top PN:",		$gPartNumT
+		PutDesignProperty "Bot PN:",		$gPartNumB
+		PutDesignProperty "TopThickness:",	$thickT
+		PutDesignProperty "BotThickness:",	$thickB
+		StrRead $thickT,  "%n",				$gThickT
+		StrRead $thickB,  "%n",				$gThickB
+		StrCmp $materialArray($MatDropSel), "Nickel"
+		If $$STATUS == 0
+			Set $gAR = .6
+		Else
+		End
+		StrCmp $materialArray($MatDropSel), "Slic"
+		If $$STATUS == 0
+			Set $gAR = .6
+		End
+		PutDesignProperty	"Process:", 	$gProcessT
+		PutDesignProperty	"ProcessB:", 	$gProcessB
+		PutDesignProperty	"Coating:", 	$gCoatT
+		PutDesignProperty	"CoatingB:", 	$gCoatB
+		StrCmp $gCoatB, "NanoSlic"
+		If $$STATUS == 0
+			Set $gAR = .5
+		End
+		StrSet $gLeadFree,	$leadFreeArray($LeadDropSel)
+		StrSet $gFrame, 	$frames($FrameDropSel)
+		StrSet $gTextMode, 	$textArray($TxtDropSel)
+		StrSet $gFidType,   $fidTypeArray($fidTypeDropSel)
+		PutDesignProperty	"Lead Free:",	$gLeadFree
+		PutDesignProperty	"Frame:",		$gFrame
+		PutDesignProperty	"Text Method:",	$gTextMode
+		PutDesignProperty	"Fid Type:",	$gFidType
+		PutDesignProperty "Engineered By:", $gOp
+		# User Customer Library
+		StrWrite $job, "%s\\%s.fpl", $gMaster, $gCustomer
+		FileOpen $fid, $job, "r"
+		If $$STATUS !=0
+			FileClose $fid
+			LoadFootprintLibrary
+				Name                 $job
+				Merge                YES
+				Footprint_Conflicts  0
+				Device_Conflicts     0
+				Go
+			End
+		Else
+			StrWrite $job, "%sMaster_FPL.fpl", $gMaster
+			Set $$STATUS = $$YES
+			LoadFootprintLibrary
+				Name                $job
+				Merge               YES
+				Footprint_Conflicts 0
+				Device_Conflicts    0
+				Go
+			End
+			StrWrite $custlib, "%s%s.fpl", $gMaster, $gCustomer
+			SaveFootprintLibrary $custlib
+			If $$STATUS == 0
+				StrWrite $log, "You must create a customer library from the Master_FPL library. (ID:008)"
+				LogMessage 3, $log
+				Stop $log
+			End
+		End
+		# GetString "Enter Stentech Job # ", $gJobNumT
+		# Check for spaces in gJobNum
+		StrLoc $gJobNumT, " "
+		Repeat $$STATUS > 0
+			GetString "Re-enter Stentech Job number (No spaces allowed):", $gJobNumT
+			StrLoc $gJobNumT, " "
+		End
+		# Prompt User to Import Files and order layers
+		# Create Job Folder
+		GetAppDataFolder $appDataPath
+		StrWrite $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+		StrWrite $gDir, "%s%s\\%s", $gWorking, $gCustomer, $gJobNumT
+		StrWrite $cmd,	"%s %s", $bat, $gDir
+		SysCmd $cmd
+		# Save Design to customer job directory
+		StrWrite $dsn, 	"%s\\%s.vcam", $gDir, $gJobNumT
+		SaveAs $dsn
+		StrWrite $log, "Startup Finished, Customer Library Loaded %s", $$TIME
+		LogMessage 0, $log
+		If $gCADmatic
+			CALLMACRO LoadFiles
+		Else
+			MessageBox "Startup Finished, Customer Library Loaded", "Please import the layers for the Job. Recommended layers to import are:\r\rTop Side:\r\tCopper\r\tSilk\r\tOriginal Paste\r\rBottom side:\r\tCopper\r\tSilk\r\tOriginal Paste\r\rDrawing:\r\tBorder\r\tDrill Drawing\r\rOnce files are imported press (F2) or run StentechMainProcess from the macro menu.", 0
+		End
+	Else
+		Set	$gSavedDSN = 1
+		StrSet $materialT, 	""
+		StrSet $thickT,   	""
+		StrSet $thickB,   	""
+		GetDesignProperty "Customer:",		$gCustomer    # Get the customer from the design properties
+		GetDesignProperty "JobNum:",		$gJobNumT     # Get the job number from the design properties
+		GetDesignProperty "JobNumB:",		$gJobNumB     # Get the job number from the design properties
+		GetDesignProperty "Top PN:",		$gPartNumT    # Get the top part number from the design properties
+		GetDesignProperty "Bot PN:",		$gPartNumB    # Get the bottom part number from the design properties
+		GetDesignProperty "TopThickness:",	$thickT       # Get the top thickness from the design properties
+		StrRead $thickT,  "%n",				$gThickT      # set the top thickness as a string
+		GetDesignProperty "BotThickness:",	$thickB       # Get the bottom thickness from the design properties
+		StrRead $thickB,  "%n",				$gThickB      # set the bottom thickness as a string
+		GetDesignProperty "Material:",		$materialT    # Get the material from the design properties
+		GetDesignProperty "MaterialB:",		$matB         # Get the material from the design properties
+		GetDesignProperty "Process:",		$gProcessT    # Get the process from the design properties
+		GetDesignProperty "ProcessB:",		$gProcessB    # Get the process from the design properties
+		GetDesignProperty "Coating:",		$gCoatT       # Get the coating from the design properties
+		GetDesignProperty "CoatingB:",		$gCoatB       # Get the coating from the design properties
+		GetDesignProperty "Lead Free:",		$gLeadFree    # Get the lead free from the design properties
+		GetDesignProperty "Frame:",			$gFrame       # Get the frame from the design properties
+		GetDesignProperty "Text Method:",	$gTextMode    # Get the text method from the design properties
+		GetDesignProperty "Fid Type:",		$gFidType     # Get the fid type from the design properties
+		GetDesignProperty "Shape Set:",		$gShapeSet 	  # Get the shape set from the design properties
+		GetDesignProperty "Shape SetB:",	$gShapeSetB   # Get the shape set from the design properties
+		GetDesignProperty "Engineered By:", $gOp          # Get the engineered by from the design properties
+		StrCmp $materialT, "Nickel"                       # Check if the material is nickel
+		If $$STATUS == 0
+			StrSet $gMatT, "N"
+			Set    $gAR = .6
+		Else
+			StrSet $gMatT, "S"
+		End
+		StrCmp $materialT, "Slic"
+		If $$STATUS == 0
+			Set $gAR = .6
+		End
+		StrCmp $gCoatT, "NanoSlic"
+		If $$STATUS == 0
+			Set $gAR = .5
+		End
+	End
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+ENDMACRO
+
+MACRO CopytoNet
+	StrWrite $log, "CopytoNet Macro Called %s", $$TIME
+	LogMessage 0, $log
+	SplitPath $$DSNNAME, $outFile, $gJobNumT, $ext                        # Split the current design Name into the output File name, job number, and extension.
+	StrCmp $gCustomer, ""                                                 # Check if the customer is empty
+	If $$STATUS == 0                                                      # If the customer is empty
+		GetDesignProperty "Customer:", $gCustomer                         # Get the customer from the design properties
+		If $$STATUS == 0
+			StrWrite $companyList, "%s\\%s", $gMaster, "Company_List.txt" # Get the company list from the master library
+			# Read list of Company names for number in list
+			Set 	$cnt = 1                                              # Initialize the counter to 1
+			StrSet 	$read, ""                                             # Initialize the read string to empty
+			FileOpen $fid,  $companyList, "r"                             # Open the company list file
+			If $$STATUS != 0                                         	  # If the company list file is open
+				Repeat $$STATUS  > 0                                 	  # Repeat until the end of the file
+					FileRead $fid, "%s", $read                       	  # Read the next line of the file
+					If $$STATUS != 0                                 	  # If the line is not empty
+						Calc $cnt = $cnt + 1                         	  # Increment the counter
+					End
+				End
+			Else
+				StrWrite $log, "Failed to read company list at\r\r%s\r\rPlease check that Datto is running properly and loaded on the M: drive. (ID:009)", $companyList # If the company list file is not open Or Datto is not running
+				LogMessage 3, $log
+				Stop $log
+			End
+			Calc      $lines = $cnt                          # Calculate the number of lines in the company list
+			FileClose $fid                                   # Close the company list File
+			StrArray  $companyNames($cnt)                    # Initialize the company names Array
+			Set       $cnt = 1                               # Initialize the counter to 1
+			FileOpen  $fid, $companyList, "r"                # Open the company list file
+			If $$STATUS != 0                                 # If the company list file is open
+				Repeat $cnt < $lines                         # Naturally avoid last line with <
+					FileRead $fid, "%s", $companyNames($cnt) # Read the next line of the file and store it in the company names array
+					Calc $cnt = $cnt + 1                     # Increment the counter
+				End
+			Else
+				StrWrite $log, "Failed to read company list at\r\r%s\r\rPlease check that Datto is running properly and loaded on the M: drive. (ID:010)", $companyList # If the company list file is not open Or Datto is not running
+				LogMessage 3, $log
+				Stop $log
+			End
+			FileClose $fid # Close the company list File
+			# Enter in Job Info
+			GetListChoice "Choose Customer Name:", $gCustomer, $companyNames # Have the user select the customer name from the company names array
+		End
+	End
+	GetAppDataFolder $appDataPath                                                      # Get the application data Folder
+	StrWrite	$bat,    "%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath # set the batch file path
+	StrWrite	$netDir, "%s%s\\%s", $gNet, $gCustomer, $gJobNumT                      # set the network directory
+	StrWrite	$cmd,    "%s %s", $bat, $netDir                                        # write the command
+	SysCmd		$cmd                                                                   # execute the command
+	StrWrite	$bat,    "%s\\macros\\CopyFolders.bat", $appDataPath                   # set the batch file path
+	StrWrite	$local,  "%s", $outFile                                                # set the local file
+	StrWrite	$cmd,    "%s %s %s", $bat, $local, $netDir                             # write the command
+	SysCmd		$cmd                                                                   # execute the command
+	Undo $$YES                                                                         # Set the undo active
+ENDMACRO

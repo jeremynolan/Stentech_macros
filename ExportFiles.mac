@@ -1,0 +1,1488 @@
+MACRO ExportApReport
+	# Macro ExportApReport Written by Robbie Devennie on 2024-06-10
+	# Macro OnStartup Converted to Stentech by Jeremy Nolan on 2025-28-07
+	StrWrite $log, "ExportApReport Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	SplitPath $$DSNNAME, $dir, $filename, $ext
+	GetAppDataFolder $appDataPath
+	StrWrite $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	StrWrite $jobDataDir, "%s\\%s", $dir, "JobData"
+	StrWrite $cmd,	"%s %s", $bat, $jobDataDir
+	SysCmd $cmd
+	IsEmptyLayer $gCutT
+	If $$STATUS == $$FALSE
+		StrWrite $reportFile, "%s\\%s.%s", $dir, "JobData\\Ap_Report_Top", "rpt"
+		ApReport
+			Repfile $reportFile
+			Layer   $gCutT
+			Go
+		End
+	End
+	IsEmptyLayer $gCutB
+	If $$STATUS == $$FALSE
+		StrWrite $reportFile, "%s\\%s.%s", $dir, "JobData\\Ap_Report_Bottom", "rpt"
+		ApReport
+			Repfile $reportFile
+			Layer   $gCutB
+			Go
+		End
+	End
+	If $gCADmatic
+		GetAppDataFolder $appDataPath
+		SplitPath 	$$DSNNAME, $dir, $filename, $ext
+		StrWrite 	$bat,    "%s\\macros\\ReferenceFiles\\CopyFile.bat", $appDataPath	# Set the Batch File path
+		StrWrite 	$jobJson, "%s\\JobData\\%s.json", $dir, $filename 				# Set the local File
+		StrWrite 	$cmd,    "%s %s %s", $bat, "C:\\CADmatic\\NewJob.json", $jobJson      # write the command
+		SysCmd 		$cmd
+	Else
+		# Do nothing
+	End
+ENDMACRO
+
+MACRO ExportCheckPlotFiles
+	StrWrite $log, "ExportCheckPlotFiles Macro Called %s", $$TIME
+	LogMessage 	0, $log
+	Undo $$NO
+	Set    $openFolder = $$YES
+	StrSet $bat,	""
+	StrSet $cmd,	""
+	StrWrite $designerInfo, " Designed by: %s, Date: %s, Macro: %s", $gOp, $gDateISO, $gMacroVersion
+	SaveAs $$DSNNAME
+	# Make sure we have the info needed to build filenames
+	CALLMACRO _SetgPasteLayersM # Find num of modified paste layers
+	If $gPasteLayers == 3
+		CALLMACRO _CheckCombo, $gComboYesNo # Check If design is a combo stencil
+	End
+	# Do we have Top, Bot, None, or Both Layers?
+	If $gPasteLayers == 0
+		LogMessage 0, "You must re-run Checkplot prior to File export."
+		Stop "You must re-run Checkplot prior to File export."
+	End
+	If $gThickT == 0 # Get thickness if missing
+		GetDesignProperty "TopThickness:", $thickT
+		If $$STATUS == 0
+			StrWrite $thickPrompt,    "Top Foil Thickness:"
+			GetValue $thickPrompt,    $gThickT
+			StrRead  $thickT, "%.0n", $gThickT
+			PutDesignProperty "TopThickness:", $thickT
+		Else
+			StrRead $thickT, "%.0n", $gThickT
+		End
+		If $gPasteLayers == 3
+			If $gComboYesNo == $$NO
+				GetDesignProperty "BotThickness:", $thickB
+				If $$STATUS == 0
+					StrWrite $thickPrompt, "Bottom Foil Thickness:"
+					GetValue $thickPrompt, $gThickB
+					StrRead  $thickB, "%.0n", $gThickB
+					PutDesignProperty "BotThickness:", $thickB
+				Else
+					StrRead $thickB, "%.0n", $gThickB
+				End
+			End
+		End
+	End
+	SplitPath $$DSNNAME, $dir, $gJobNumT, $ext
+	# CALLMACRO _ConvertText
+	# Create Layer Names
+	StrWrite $thickT, "%.0n", $gThickT
+	StrWrite $thickB, "%.0n", $gThickB
+	# Create additional export folders per Other Users
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	StrWrite  $cptDir, 	"%s\\CheckPlots%s", $dir, "\\"
+	StrWrite  $cmd, 	"%s %s", $bat, $cptDir
+	SysCmd    $cmd
+	# Stencil Report Name
+	StrWrite $reportName, "%s\\%s", $cptDir, $gJobNumT
+	StrWrite $log, "Report name: %s", $reportName
+	LogMessage 0, $log
+	# Checkplot Names
+	CALLMACRO _CheckPlotNames
+	# Checkplot Names - Top
+	StrWrite $CPTout, "%s%s", $cptDir, $gCPTName
+	StrWrite $log, "Check Plot Top name: %s", $CPTout
+	LogMessage 0, $log
+	# Bot CheckPlot
+	StrWrite $CPBout, "%s%s", $cptDir, $gCPBName
+	StrCmp   $CPTout, $CPBout
+	StrWrite $log, "Check Plot Bottom name: %s", $CPBout
+	LogMessage 0, $log
+	If $$STATUS == 0
+		SplitPath $CPBout, $tmp, $gCPBName, $tmp
+		StrWrite  $CPBout, "%s%s%s", $cptDir, $gCPBName, "_Bot.gbr"
+	End
+	# Export CheckPlot
+	ExportFormat "Gerber"
+		Dialect         "RS274X"
+		M.N             3,3
+		Mode            "Absolute"
+		ZeroSuppression "Leading"
+		Terminator      "*\r\n"
+		CharSet         "ASCII"
+		Metric          $$YES
+		Modal           $$NO
+		Nets            $$NO
+		Userdata        $$YES
+		Gcmds           $$YES
+		Comments        $$YES
+		FlattenCustoms 	$$NO
+	End
+	GetTempLayer $exportCPT, $$LTOTHER
+	CopyLayer $gCheckPlotT, $exportCPT
+	GetExtents $exportCPT, $lx,$ly, $ux,$uy
+	SelectGroup
+		Mode         0
+	End
+	SelectGroup
+		By           1 # 0=item, 1=window, 4=net
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$NO
+		Arcs         $$NO
+		Polys        $$NO
+		Text         $$NO
+		Drills       $$NO
+		Slots        $$NO
+		DrillCircles $$NO
+		DrillText    $$NO
+		MillPaths    $$NO
+		MillCircles  $$NO
+		Polarity     0
+		Dcode        9990
+		Layer        $exportCPT
+		Mode         1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By   	1
+		Dcode	9991
+		Layer	$exportCPT
+		Mode 	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9992
+		Layer	$exportCPT
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9993
+		Layer	$exportCPT
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9994
+		Layer	$exportCPT
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9995
+		Layer	$exportCPT
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	If $$SELGRPCNT > 0
+		Erase
+			By		2
+			Layer	$exportCPT
+			Go $lx,$ly, $ux,$uy
+		End
+	End
+	SelectGroup
+		Mode   0
+	End
+	GetTempLayer $exportCPB, $$LTOTHER
+	CopyLayer $gCheckPlotB, $exportCPB
+	GetExtents $exportCPB, $lx,$ly, $ux,$uy
+	SelectGroup
+		Mode         0
+	End
+	SelectGroup
+		By           1 # 0=item, 1=window, 4=net
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$NO
+		Arcs         $$NO
+		Polys        $$NO
+		Text         $$NO
+		Drills       $$NO
+		Slots        $$NO
+		DrillCircles $$NO
+		DrillText    $$NO
+		MillPaths    $$NO
+		MillCircles  $$NO
+		Polarity     0
+		Dcode        9990
+		Layer        $exportCPB
+		Mode         1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By   	1
+		Dcode	9991
+		Layer	$exportCPB
+		Mode 	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9992
+		Layer	$exportCPB
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9993
+		Layer	$exportCPB
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9994
+		Layer	$exportCPB
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	SelectGroup
+		By		1
+		Dcode	9995
+		Layer	$exportCPB
+		Mode	1
+		Go $lx,$ly, $ux,$uy
+	End
+	If $$SELGRPCNT > 0
+		Erase
+			By		2
+			Layer	$exportCPB
+			Go $lx,$ly, $ux,$uy
+		End
+	End
+	SelectGroup
+		Mode   0
+	End
+	Layern $exportCPB
+		Comments $designerInfo
+	End
+	ExportGerber
+		If $gPasteLayers == 1
+			OutFile $CPTout, $exportCPT
+		End
+		If $gPasteLayers == 2
+			OutFile $CPBout, $gCheckPlotB
+		End
+		If $gPasteLayers == 3
+			OutFile $CPTout, $exportCPT
+			If $gComboYesNo == $$NO
+				OutFile $CPBout, $gCheckPlotB
+			End
+		End
+	End
+	FreeTempLayer $exportCPT
+	FreeTempLayer $exportCPB
+	CALLMACRO UpdateLibrary
+	StrWrite $log, "Check Plot File Export Macro Complete %s", $$TIME
+	LogMessage 0, $log
+ENDMACRO
+
+MACRO ExportLPKFFiles
+	# $exportLSR  → $1
+	# $exportScan → $2
+	# $exportPOS  → $3
+	StrWrite $log, "ExportLPKFFiles Macro Called %s", $$TIME
+	LogMessage 	0, $log
+	Undo   $$NO
+	Set    $openFolder = $$YES
+	StrSet $bat,	   ""
+	StrSet $cmd,	   ""
+	StrSet $topSuffix, "_Top_"
+	StrSet $btmSuffix, "_Btm_"
+	StrWrite $designerInfo, " Designed by: %s, Date: %s, Macro: %s", $gOp, $gDateISO, $gMacroVersion
+	SaveAs $$DSNNAME
+	If $$CALLDEPTH == 0
+		Set $1 = $$YES`
+		Set $2 = $$YES
+		Set $3 = $$YES
+	End
+	StrWrite $log, "ExportLPKFFiles exportLSR = %.0n, exportScan = %.0n, exportPOS = %.0n", $1, $2, $3
+	LogMessage 	0, $log
+	Set $exportLSR  = $1
+	Set $exportScan = $2
+	Set $exportPOS  = $3
+	# Make sure we have the info needed to build filenames
+	CALLMACRO _SetgPasteLayersM # Find num of modified paste layers
+	If $gPasteLayers == 1
+		StrSet $topSuffix, "_" # switch _Top_ for _ in single image stencils.
+	End
+	If $gPasteLayers == 3
+		CALLMACRO _CheckCombo, $gComboYesNo # Check If design is a combo stencil
+		If $gComboYesNo == $$YES
+			StrSet  $topSuffix, "_" # switch _Top_ for _ in combo stencils.
+		End
+	End
+	# Do we have Top, Bot, None, or Both Layers?
+	If $gPasteLayers == 0
+		LogMessage 0, "You must re-run Checkplot prior to File export."
+		Stop "You must re-run Checkplot prior to File export."
+	End
+	If $gThickT == 0 # Get thickness if missing
+		GetDesignProperty "TopThickness:", $thickT
+		If $$STATUS == 0
+			StrWrite $thickPrompt,    "Top Foil Thickness:"
+			GetValue $thickPrompt,    $gThickT
+			StrRead  $thickT, "%.0n", $gThickT
+			PutDesignProperty "TopThickness:", $thickT
+		Else
+			StrRead $thickT, "%1n", $gThickT
+		End
+		If $gPasteLayers == 3
+			If $gComboYesNo == $$NO
+				GetDesignProperty "BotThickness:", $thickB
+				If $$STATUS == 0
+					StrWrite $thickPrompt, "Bottom Foil Thickness:"
+					GetValue $thickPrompt, $gThickB
+					StrRead  $thickB, "%.0n", $gThickB
+					PutDesignProperty "BotThickness:", $thickB
+				Else
+					StrRead $thickB, "%1n", $gThickB
+				End
+			End
+		End
+	End
+	SplitPath $$DSNNAME, $gDir, $gJobNumT, $ext
+	# Create Layer Names
+	StrWrite $thickT, "%.0n", $gThickT
+	StrWrite $thickB, "%.0n", $gThickB
+
+	# Create additional export folders per Other Users
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat,		"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	StrWrite  $cutDir,	"%s\\%s%s", $gDir, $gJobNumT, "\\"
+	StrWrite  $cmd,		"%s %s", $bat, $cutDir
+	SysCmd    $cmd
+
+	LogMessage 0, "Preparing LPKF Files"
+	# LMD (GBR.lsr) Names
+	Set $yesNo = $$NO
+	StrWrite $LMDNameT,  "%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, "GBR", ".lsr"
+	StrWrite $LMDNameB,  "%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, "GBR", ".lsr"
+	# POS Names
+	StrWrite $PosNameT,  "%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, "POS", ".lsr"
+	StrWrite $PosNameB,  "%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, "POS", ".lsr"
+	# SCAN Names
+	StrWrite $ScanNameT, "%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, "SCAN",".lsr"
+	StrWrite $ScanNameB, "%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, "SCAN",".lsr"
+	# Export Gerber(s) LPKF style
+	StrWrite $log, "Setting up export Format for LPKF style export."
+	LogMessage 0, $log
+	ExportFormat "Gerber"
+		Dialect         "RS274X"
+		M.N             3,3
+		Mode            "Absolute"
+		ZeroSuppression "Leading"
+		Terminator      "*\r\n"
+		CharSet         "ASCII"
+		Metric          $$YES
+		Modal           $$NO
+		Nets            $$NO
+		Userdata        $$YES
+		Gcmds           $$YES
+		Comments        $$YES
+		FlattenCustoms 	$$NO
+	End
+	# Export Gerber(s)
+	StrWrite $log, "Exporting LPKF Files. Total Paste Layers = %.0n", $gPasteLayers
+	LogMessage 0, $log
+	If $gPasteLayers == 1
+		If $exportLSR == $$YES
+			GetTempLayer $exportLMDT,	$$LTOTHER
+			CopyLayer 	 $gLMDT,		$exportLMDT
+			Layern $exportLMDT
+				LyrName	 "Export LMD Top"
+				Comments $designerInfo
+			End
+			StrCmp $gExportType, "Contact"
+			If $$STATUS == 0
+				# only mirror for BRS Exports
+				CALLMACRO _MirrorLayer, $exportLMDT
+			Else
+				# do nothing
+			End
+			ExportGerber
+				OutFile $LMDNameT, $exportLMDT
+			End
+			StrWrite $log, "Exported %s %s", $LMDNameT,  $$TIME
+			LogMessage 0, $log
+			FreeTempLayer $exportLMDT
+		End
+		If $exportScan == $$YES
+			GetTempLayer $exportScanT,	$$LTOTHER
+			CopyLayer 	 $gCutT,		$exportScanT
+			Layern $exportScanT
+				LyrName	 "Export Scan Top"
+				Comments $designerInfo
+			End
+			StrCmp $gExportType, "Contact"
+			If $$STATUS == 0
+				# only mirror for BRS Exports
+				CALLMACRO _MirrorLayer, $exportScanT # only mirror for BRS Exports
+			Else
+				# do nothing
+			End
+
+			Layern $exportScanT
+				Comments $designerInfo
+			End
+			ExportGerber
+				OutFile $ScanNameT, $exportScanT
+			End
+			StrWrite $log, "Exported %s %s", $ScanNameT, $$TIME
+			LogMessage 0, $log
+			FreeTempLayer $exportScanT
+		End
+		If $exportPOS == $$YES
+			Layern $gSizePlotT
+				Comments $designerInfo
+			End
+			ExportGerber
+				OutFile $PosNameT, $gSizePlotT
+			End
+			StrWrite $log, "Exported %s %s", $PosNameT,  $$TIME
+			LogMessage 0, $log
+		End
+	End
+	If $gPasteLayers == 2
+		If $exportLSR == $$YES
+			GetTempLayer $exportLMDB,	$$LTOTHER
+			CopyLayer 	 $gLMDB,		$exportLMDB
+			Layern $exportLMDB
+				LyrName	 "Export LMD Bottom"
+				Comments $designerInfo
+			End
+			StrCmp $gExportType, "Contact"
+			If $$STATUS == 0
+				# only mirror for BRS Exports
+				CALLMACRO _MirrorLayer, $exportLMDB
+			Else
+				# do nothing
+			End
+			ExportGerber
+				OutFile $LMDNameB, $exportLMDB
+			End
+			StrWrite $log, "Exported %s %s", $LMDNameB,  $$TIME
+			LogMessage 0, $log
+			FreeTempLayer $exportLMDB
+		End
+		If $exportScan == $$YES
+			GetTempLayer $exportScanB,	$$LTOTHER
+			CopyLayer 	 $gCutB,		$exportScanB
+			Layern $exportScanB
+				LyrName	 "Export Scan Bottom"
+				Comments $designerInfo
+			End
+
+			StrCmp $gExportType, "Contact"
+			If $$STATUS == 0
+				# only mirror for BRS Exports
+				CALLMACRO _MirrorLayer, $exportScanB
+			Else
+				# do nothing
+			End
+			Layern $exportScanB
+				Comments $designerInfo
+			End
+			ExportGerber
+				OutFile $ScanNameB, $exportScanB
+			End
+			StrWrite $log, "Exported %s %s", $ScanNameB, $$TIME
+			LogMessage 0, $log
+			FreeTempLayer $exportScanB
+		End
+		If $exportPOS == $$YES
+			Layern $gSizePlotB
+				Comments $designerInfo
+			End
+			ExportGerber
+				OutFile $PosNameB, $gSizePlotB
+			End
+			StrWrite $log, "Exported %s %s", $PosNameB,  $$TIME
+			LogMessage 0, $log
+		End
+	End
+	If $gPasteLayers == 3
+		If $exportLSR == $$YES
+			GetTempLayer $exportLMDT,	$$LTOTHER
+			CopyLayer 	 $gLMDT,		$exportLMDT
+			Layern $exportLMDT
+				LyrName	 "Export LMD Top"
+				Comments $designerInfo
+			End
+
+			StrCmp $gExportType, "Contact"
+			If $$STATUS == 0
+				# only mirror for BRS Exports
+				CALLMACRO _MirrorLayer, $exportLMDT
+			Else
+				# do nothing
+			End
+			ExportGerber
+				OutFile $LMDNameT, $exportLMDT
+			End
+			StrWrite $log, "Exported %s %s", $LMDNameT,  $$TIME
+			LogMessage 0, $log
+			FreeTempLayer $exportLMDT
+		End
+		If $exportScan == $$YES
+			GetTempLayer $exportScanT,	$$LTOTHER
+			CopyLayer 	 $gCutT,		$exportScanT
+			Layern $exportScanT
+				LyrName	 "Export Scan Top"
+				Comments $designerInfo
+			End
+			StrCmp $gExportType, "Contact"
+			If $$STATUS == 0
+				# only mirror for BRS Exports
+				CALLMACRO _MirrorLayer, $exportScanT
+			Else
+				# do nothing
+			End
+			Layern $exportScanT
+				Comments $designerInfo
+			End
+			ExportGerber
+				OutFile $ScanNameT, $exportScanT
+			End
+			StrWrite $log, "Exported %s %s", $ScanNameT, $$TIME
+			LogMessage 0, $log
+			FreeTempLayer $exportScanT
+		End
+		If $exportPOS == $$YES
+			Layern $gSizePlotT
+				Comments $designerInfo
+			End
+			ExportGerber
+				OutFile $PosNameT, $gSizePlotT
+			End
+			StrWrite $log, "Exported %s %s", $PosNameT,  $$TIME
+			LogMessage 0, $log
+		End
+		If $gComboYesNo == $$NO
+			If $exportLSR == $$YES
+				GetTempLayer $exportLMDB,	$$LTOTHER
+				CopyLayer 	 $gLMDB,		$exportLMDB
+				Layern $exportLMDB
+					LyrName	 "Export LMD Bottom"
+					Comments $designerInfo
+				End
+				StrCmp $gExportType, "Contact"
+				If $$STATUS == 0
+					# only mirror for BRS Exports
+					CALLMACRO _MirrorLayer, $exportLMDB
+				Else
+					# do nothing
+				End
+				ExportGerber
+					OutFile $LMDNameB, $exportLMDB
+				End
+				StrWrite $log, "Exported %s %s", $LMDNameB,  $$TIME
+				LogMessage 0, $log
+				FreeTempLayer $exportLMDB
+			End
+			If $exportScan == $$YES
+				GetTempLayer $exportScanB,	$$LTOTHER
+				CopyLayer 	 $gCutB,		$exportScanB
+				Layern $exportScanB
+					LyrName	 "Export Scan Bottom"
+					Comments $designerInfo
+				End
+				StrCmp $gExportType, "Contact"
+				If $$STATUS == 0
+					# only mirror for BRS Exports
+					CALLMACRO _MirrorLayer, $exportScanB
+				Else
+					# do nothing
+				End
+				Layern $exportScanB
+					Comments $designerInfo
+				End
+				ExportGerber
+					OutFile $ScanNameB, $exportScanB
+				End
+				StrWrite $log, "Exported %s %s", $ScanNameB, $$TIME
+				LogMessage 0, $log
+				FreeTempLayer $exportScanB
+			End
+			If $exportPOS == $$YES
+				Layern $gSizePlotB
+					Comments $designerInfo
+				End
+				ExportGerber
+					OutFile $PosNameB, $gSizePlotB
+				End
+				StrWrite $log, "Exported %s %s", $PosNameB,  $$TIME
+				LogMessage 0, $log
+			End
+		End
+	End
+	StrWrite $log, "LPKF File Export Macro Complete %s", $$TIME
+	LogMessage 0, $log
+ENDMACRO
+
+MACRO ExportNSGFiles
+	StrWrite $log, "ExportNSGFiles Macro Called %s", $$TIME
+	LogMessage 	0, $log
+	Set    $openFolder = $$YES
+	StrSet $bat, ""
+	StrSet $cmd, ""
+	SaveAs $$DSNNAME
+	StrWrite $designerInfo, " Designed by: %s, Date: %s, Macro: %s", $gOp, $gDateISO, $gMacroVersion
+	# Make sure we have the info needed to build filenames
+	If $gPasteLayers == 0
+		CALLMACRO _SetgPasteLayersM
+	End
+	If $gPasteLayers == 3
+		CALLMACRO _CheckCombo, $gComboYesNo # Check If design is a combo stencil
+	End
+	# Do we have Top, Bot, None, or Both Layers?
+	If $gPasteLayers == 0
+		LogMessage 0, "You must re-run Checkplot prior to File export."
+		Stop "You must re-run Checkplot prior to File export."
+	End
+	SplitPath $$DSNNAME, $gDir, $filename, $ext
+	# Create additional export folders per Other Users
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	# Create additional export folders per Other Users
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	StrWrite  $cutDir,	"%s\\%s%s", $gDir, $gJobNumT, "\\"
+	StrWrite  $cmd, 	"%s %s", $bat, $cutDir
+	SysCmd    $cmd
+	CompactApList $$YES
+	LogMessage 0, "Preparing NSG Files"
+	CompactApList $$YES
+	LogMessage 0, "Compacted aperture table"
+	StrWrite $nsgT,  "%s%s%s%s", $cutDir, $gJobNumT, "_Top_",    ".nsg"
+	StrWrite $nsgB,  "%s%s%s%s", $cutDir, $gJobNumB, "_Bottom_", ".nsg"
+	StrWrite $designerInfo, " Designed by: %s, Date: %s, Macro: %s", $gOp, $gDateISO, $gMacroVersion
+	ExportFormat "Gerber"
+		Dialect         "RS274X"
+		M.N             3,3
+		Mode            "Absolute"
+		ZeroSuppression "Leading"
+		Terminator      "*\r\n"
+		CharSet         "ASCII"
+		Metric          $$YES
+		Modal           $$NO
+		Nets            $$NO
+		Userdata        $$YES
+		Gcmds           $$YES
+		Comments        $$YES
+		FlattenCustoms 	$$YES
+	End
+	StrWrite $log, "Exporting NSG Files. Total Paste Layers = %.0n", $gPasteLayers
+	LogMessage 0, $log
+	GetTempLayer $exportNSGLayerT,	$$LTOTHER
+	CopyLayer 	 $gNSGLayerT,		$exportNSGLayerT
+	GetTempLayer $exportNSGLayerB,	$$LTOTHER
+	CopyLayer 	 $gNSGLayerB,		$exportNSGLayerB
+
+	Layern $exportNSGLayerT
+		LyrName	 "Export NSG Top"
+		Comments $designerInfo
+	End
+	Layern $exportNSGLayerB
+		LyrName	 "Export NSG Bottom"
+		Comments $designerInfo
+	End
+	StrCmp $gExportType, "Contact"
+	If $$STATUS == 0
+		# only mirror for BRS Exports
+		CALLMACRO _MirrorLayer, $exportNSGLayerT
+		CALLMACRO _MirrorLayer, $exportNSGLayerB
+	Else
+		# do nothing
+	End
+	Set $layer = $exportNSGLayerT
+	GetPasteLayerInfo $layer, 1, $volume, $minimumAreaRatio, $quantity
+	StrWrite $log, "$volume=%n, $minimumAreaRatio=%n, $quantity=%n", $volume, $minimumAreaRatio, $quantity
+	LogMessage 0, $log
+	If $quantity > 1
+		StrWrite $message, "NSG Layer has too many aps (%.0n)\r\rExport will continue please review layer %.0n then re-export NSG files.\r\rNo other layers affected.", $quantity, $layer
+		MessageBox "NSG Error", $message, 0
+	End
+	Set $layer = $exportNSGLayerB
+	GetPasteLayerInfo $layer, 1, $volume, $minimumAreaRatio, $quantity
+	StrWrite $log, "$volume=%n, $minimumAreaRatio=%n, $quantity=%n", $volume, $minimumAreaRatio, $quantity
+	LogMessage 0, $log
+	If $quantity > 1
+		StrWrite $message, "NSG Layer has too many aps (%.0n)\r\rExport will continue please review layer %.0n then re-export NSG files.\r\rNo other layers affected.", $quantity, $layer
+		MessageBox "NSG Error", $message, 0
+	End
+	ExportGerber
+		IsEmptyLayer $gNSGLayerT
+		If $$STATUS == $$FALSE
+			OutFile $nsgT, $exportNSGLayerT
+		End
+		IsEmptyLayer $gNSGLayerB
+		If $$STATUS == $$FALSE
+			OutFile $nsgB, $exportNSGLayerB
+		End
+	End
+	FreeTempLayer $exportNSGLayerT
+	FreeTempLayer $exportNSGLayerB
+	StrWrite $log, "NSG File Export Macro Complete %s", $$TIME
+	LogMessage 0, $log
+ENDMACRO
+
+MACRO ExportTannlinFiles
+	StrWrite $log, "ExportTannlinFiles Macro Called %s", $$TIME
+	LogMessage 	0, $log
+	Set    $openFolder = $$YES
+	StrSet $bat, ""
+	StrSet $cmd, ""
+	StrSet $topSuffix, "_Top_"
+	StrSet $btmSuffix, "_Btm_"
+	Set    $exportEngraveFileT = $$NO
+	Set    $exportEngraveFileB = $$NO
+	SaveAs $$DSNNAME
+	StrWrite $designerInfo, " Designed by: %s, Date: %s, Macro: %s", $gOp, $gDateISO, $gMacroVersion
+	# Make sure we have the info needed to build filenames
+	CALLMACRO _SetgPasteLayersM # Find num of modified paste layers
+	If $gPasteLayers == 1
+		StrSet $topSuffix, "_" # switch "_Top_" for "_" in single image stencils.
+	End
+	If $gPasteLayers == 3
+		CALLMACRO _CheckCombo, $gComboYesNo # Check If design is a combo stencil
+		If $gComboYesNo == $$YES
+			StrSet $topSuffix, "_" # switch "_Top_" for "_" in combo stencils.
+		End
+	End
+	# Check if squeegee fids are enabled
+	StrWrite $log, "Fid Type %s", $gFidType
+	LogMessage 0, $log
+	Set $squeeFids = $$FALSE
+	StrCmp $gFidType, "Squeegee"
+	If $$STATUS == 0
+		Set $squeeFids = $$TRUE
+	End
+	StrCmp $gFidType, "Both"
+	If $$STATUS == 0
+		Set $squeeFids = $$TRUE
+	End
+	# Save alignment layers from being overwritten.
+	Layern $gAlignT
+		LyrName		"Alignment Layer Top.12"
+		Comments 	$designerInfo
+		FlashColor  "Yellow"
+		DrawColor   "Pink"
+	End
+	Layern $gAlignB
+		LyrName		"Alignment Layer Bottom.12"
+		Comments 	$designerInfo
+		FlashColor  "Pink"
+		DrawColor   "Yellow"
+	End
+	# Set Layer variables to track which to remove.
+	Set $exportCutT       = -2
+	Set $exportEngraveT   = -2
+	Set $exportEngraveSqT = -2
+	Set $exportTxtOut20T  = -2
+	Set $exportCutB       = -2
+	Set $exportEngraveB   = -2
+	Set $exportEngraveSqB = -2
+	Set $exportTxtOut20B  = -2
+	# Do we have Top, Bot, None, or Both Layers?
+	If $gPasteLayers == 0
+		LogMessage 0, "You must re-run Checkplot prior to File export."
+		Stop "You must re-run Checkplot prior to File export."
+	End
+	If $gThickT == 0 # Get thickness if missing
+		GetDesignProperty "TopThickness:", $thickT
+		If $$STATUS == 0
+			StrWrite $thickPrompt,    "Top Foil Thickness:"
+			GetValue $thickPrompt,    $gThickT
+			StrRead  $thickT, "%.0n", $gThickT
+			PutDesignProperty "TopThickness:", $thickT
+		Else
+			StrRead $thickT, "%1n", $gThickT
+		End
+		If $gPasteLayers == 3
+			If $gComboYesNo == $$NO
+				GetDesignProperty "BotThickness:", $thickB
+				If $$STATUS == 0
+					StrWrite $thickPrompt, "Bottom Foil Thickness:"
+					GetValue $thickPrompt, $gThickB
+					StrRead  $thickB, "%.0n", $gThickB
+					PutDesignProperty "BotThickness:", $thickB
+				Else
+					StrRead $thickB, "%1n", $gThickB
+				End
+			End
+		End
+	End
+	SplitPath $$DSNNAME, $gDir, $gJobNumT, $ext
+	# CALLMACRO _ConvertText
+	# Create Layer Names
+	Set $thickCeilT = 0
+	Set $thickCeilB = 0
+	Ceil $thickCeilT = $gThickT
+	Ceil $thickCeilB = $gThickB
+	StrWrite $thickT, "%.0n", $thickCeilT
+	StrWrite $thickB, "%.0n", $thickCeilB
+	# Create additional export folders per Other Users
+	GetAppDataFolder $appDataPath
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	# Create additional export folders per Other Users
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat, 	"%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+	StrWrite  $cutDir,  "%s\\%s%s", $gDir, $gJobNumT, "\\"
+	StrWrite  $cmd, 	"%s %s", $bat, $cutDir
+	SysCmd    $cmd
+	CompactApList $$YES
+	# Tannlin Laser Names
+	LogMessage 0, "Preparing Tannlin Files"
+	FlattenCustom
+	LogMessage 0, "Flattened Customs"
+	CompactApList $$YES
+	LogMessage 0, "Compacted aperture table"
+	# Set Tool Prefix based on Material
+	StrSet $toolPreFixT, "S"
+	StrSet $toolPreFixB, "S"
+	StrCmp $gMatT, "Nickel"
+	If $$STATUS == 0
+		StrSet $toolPreFixT, "N"
+	End
+	StrCmp $gMatB, "Nickel"
+	If $$STATUS == 0
+		StrSet $toolPreFixB, "N"
+	End
+	# Create Layer Names
+	StrWrite $CTName,  "%s%s%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, $toolPreFixT, "0", $thickT, ".1"
+	StrWrite $CBName,  "%s%s%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, $toolPreFixB, "0", $thickB, ".1"
+	# .20 Cut Names
+	StrWrite $T20Name, "%s%s%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, $toolPreFixT, "0", $thickT, ".20"
+	StrWrite $B20Name, "%s%s%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, $toolPreFixB, "0", $thickB, ".20"
+	# Laser Board side Engrave Names
+	StrWrite $ETName,  "%s%s%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, $toolPreFixT, "0", $thickT, ".5"
+	StrWrite $EBName,  "%s%s%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, $toolPreFixB, "0", $thickB, ".5"
+	# Laser Squeegee Side Engrave Names
+	StrWrite $SETName, "%s%s%s%s%s%s%s", $cutDir, $gJobNumT, $topSuffix, $toolPreFixT, "0", $thickT, "_squeegee.5"
+	StrWrite $SEBName, "%s%s%s%s%s%s%s", $cutDir, $gJobNumB, $btmSuffix, $toolPreFixB, "0", $thickB, "_squeegee.5"
+	# Text Names
+	StrWrite $TxtName,    "%s%s%s%s",    $cutDir, $gJobNumT, $topSuffix, "Text.5"
+	StrWrite $TxtBName,   "%s%s%s%s",    $cutDir, $gJobNumB, $btmSuffix, "Text.5"
+	# Align Names
+	StrWrite $AlignTName, "%s%s%s%s",    $cutDir, $gJobNumT, $topSuffix, ".12"
+	StrWrite $AlignBName, "%s%s%s%s",    $cutDir, $gJobNumB, $btmSuffix, ".12"
+	# Export Gerber(s) Tannlin style
+	StrWrite $log, "Setting up export Format for Tannlin style export."
+	LogMessage 0, $log
+	ExportFormat "Gerber"
+		Dialect         "RS274X"
+		M.N             3,3
+		Mode            "Absolute"
+		ZeroSuppression "Leading"
+		Terminator      "*\r\n"
+		CharSet         "ASCII"
+		Metric          $$YES
+		Modal           $$NO
+		Nets            $$NO
+		Userdata        $$YES
+		Gcmds           $$YES
+		Comments        $$YES
+		FlattenCustoms 	$$YES
+	End
+	StrWrite $log, "Exporting Tannlin Files. Total Paste Layers = %.0n", $gPasteLayers
+	LogMessage 0, $log
+	IsEmptyLayer $gCutT
+	If $$STATUS == $$FALSE
+		GetTempLayer $exportCutT, $$LTOTHER
+		CopyLayer 	 $gCutT, $exportCutT
+		StrCmp $gFidType, "Cut-Thru"
+		If $$STATUS == 0
+			StrWrite $log, "Cut-Thru Fid Type detected. Adding fids to Top cut layer"
+			LogMessage 0, $log
+			CopyLayer $gFidT, $exportCutT
+		End
+		StrWrite $tempName, "_%s Cut Top", $gJobNumT
+		Layern $exportCutT
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+		StrCmp $gExportType, "Contact"
+		If $$STATUS == 0
+			# only mirror for BRS Exports
+			CALLMACRO _MirrorLayer,	$exportCutT # only mirror for BRS exports
+		Else
+			# do nothing
+		End
+	End
+	GetTempLayer $exportEngraveT, $$LTOTHER
+	IsEmptyLayer $gEngraveT
+	If $$STATUS == $$FALSE
+		Set $exportEngraveFileT = $$YES
+		CopyLayer 	 $gEngraveT, $exportEngraveT
+		StrWrite $tempName, "_%s Engrave Top", $gJobNumT
+		Layern $exportEngraveT
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+		CALLMACRO _AddJobNumToFidLayer, $gJobNumT, $exportEngraveT, $$YES
+		StrCmp $gExportType, "Contact"
+		If $$STATUS == 0
+			# only mirror for BRS Exports
+			CALLMACRO _MirrorLayer,	$exportEngraveT # only mirror for BRS exports
+		Else
+			# do nothing
+		End
+	End
+	StrCmp $gTextMode, "Engraved (contact)"
+	If $$STATUS == 0
+		Set $exportEngraveFileT = $$YES
+		CopyLayer $gTxtT, $exportEngraveT
+		StrWrite $tempName, "_%s Engrave Top", $gJobNumT
+		Layern $exportEngraveT
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+	End
+	IsEmptyLayer $gTxtOut20T
+	If $$STATUS == $$FALSE
+		GetTempLayer $exportTxtOut20T, $$LTOTHER
+		CopyLayer 	 $gTxtOut20T, $exportTxtOut20T
+		StrWrite $tempName, "_%s TxtOut20 Top", $gJobNumT
+		Layern $exportTxtOut20T
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+		StrCmp $gExportType, "Contact"
+		If $$STATUS == 0
+			# only mirror for BRS Exports
+			CALLMACRO _MirrorLayer,	$exportTxtOut20T # only mirror for BRS exports
+		Else
+			# do nothing
+		End
+	End
+	IsEmptyLayer $gCutB
+	If $$STATUS == $$FALSE
+		GetTempLayer $exportCutB, $$LTOTHER
+		CopyLayer 	 $gCutB, $exportCutB
+		StrCmp $gFidType, "Cut-Thru"
+		If $$STATUS == 0
+			StrWrite $log, "Cut-Thru Fid Type detected. Adding fids to Bottom cut layer"
+			LogMessage 0, $log
+			CopyLayer $gFidB, $exportCutB
+		End
+		StrWrite $tempName, "_%s Cut Bottom", $gJobNumB
+		Layern $exportCutB
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+		StrCmp $gExportType, "Contact"
+		If $$STATUS == 0
+			# only mirror for BRS Exports
+			CALLMACRO _MirrorLayer,	$exportCutB # only mirror for BRS exports
+		Else
+			# do nothing
+		End
+	End
+	GetTempLayer $exportEngraveB, $$LTOTHER
+	IsEmptyLayer $gEngraveB
+	If $$STATUS == $$FALSE
+		Set $exportEngraveFileB = $$YES
+		CopyLayer 	 $gEngraveB,		$exportEngraveB
+		StrWrite $tempName, "_%s Engrave Bottom", $gJobNumB
+		Layern $exportEngraveB
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+		CALLMACRO _AddJobNumToFidLayer, $gJobNumB, $exportEngraveB, $$YES
+		StrCmp $gExportType, "Contact"
+		If $$STATUS == 0
+			# only mirror for BRS Exports
+			CALLMACRO _MirrorLayer,	$exportEngraveB # only mirror for BRS exports
+		Else
+			# do nothing
+		End
+	End
+	StrCmp $gTextMode, "Engraved (contact)"
+	If $$STATUS == 0
+		Set $exportEngraveFileB = $$YES
+		CopyLayer $gTxtB, $exportEngraveB
+		StrWrite $tempName, "_%s Engrave Bottom", $gJobNumB
+		Layern $exportEngraveB
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+	End
+	IsEmptyLayer $gTxtOut20B
+	If $$STATUS == $$FALSE
+		GetTempLayer $exportTxtOut20B,	$$LTOTHER
+		CopyLayer 	 $gTxtOut20B,		$exportTxtOut20B
+		StrWrite $tempName, "_%s TxtOut20 Bottom", $gJobNumB
+		Layern $exportTxtOut20B
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+		StrCmp $gExportType, "Contact"
+		If $$STATUS == 0
+			# only mirror for BRS Exports
+			CALLMACRO _MirrorLayer,	$exportTxtOut20B # only mirror for BRS exports
+		Else
+			# do nothing
+		End
+	End
+	IsEmptyLayer $gAlignT
+	If $$STATUS == $$FALSE
+		StrWrite $tempName, "_%s Align Top", $gJobNumT
+		Layern $gAlignT
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+	End
+	IsEmptyLayer $gAlignB
+	If $$STATUS == $$FALSE
+		StrWrite $tempName, "_%s Align Bottom", $gJobNumB
+		Layern $gAlignB
+			LyrName	 $tempName
+			Comments $designerInfo
+		End
+	End
+	Set $removeFlashes = $$NO
+	StrCmp $gFidType, "Squeegee"
+	If $$STATUS == 0
+		Set $removeFlashes = $$YES
+	End
+	StrCmp $gFidType, "Cut-Thru"
+	If $$STATUS == 0
+		Set $removeFlashes = $$YES
+	End
+	Set $exportTxtFile = $$NO
+	StrCmp $gTextMode, "Engraved (squeegee)"
+	If $$STATUS == 0
+		Set $exportTxtFile = $$YES
+	End
+	StrCmp $gTextMode, "Marked"
+	If $$STATUS == 0
+		Set $exportTxtFile = $$YES
+	End
+	If $gPasteLayers == 1
+		Layern $gCutT
+			SplitPath $CTName, $tmp, $filename, $ext
+			StrWrite  $TCout, "%s.%s", $filename, $ext
+			LyrName   $TCout
+			Comments  $designerInfo
+		End
+		ExportGerber
+			OutFile $CTName, $exportCutT
+			# Export top engrave layer?
+			If $exportEngraveFileT == $$YES
+				If $removeFlashes == $$YES
+					CALLMACRO _RemoveFlashesFromLayer, $exportEngraveT
+				End
+				CALLMACRO _FillFidAps, $exportEngraveT
+				OutFile $ETName, $exportEngraveT
+			End
+			IsEmptyLayer $gTxtT
+			If $$STATUS == $$FALSE
+				If $exportTxtFile == $$YES
+					OutFile $TxtName, $gTxtT
+				End
+			End
+			IsEmptyLayer $gTxtOut20T
+			If $$STATUS == $$FALSE
+				CALLMACRO RAD_SegmentArcs, $exportTxtOut20T
+				OutFile $T20Name, $exportTxtOut20T
+			End
+			IsEmptyLayer $gAlignT
+			If $$STATUS == $$FALSE
+				OutFile $AlignTName, $gAlignT
+			End
+		End
+	End
+	If $gPasteLayers == 2
+		SplitPath $CBName, $tmp, $filename, $ext
+		StrWrite  $BCout, "%s.%s", $filename, $ext
+		Layern $exportCutB
+			LyrName   $BCout
+			Comments  $designerInfo
+		End
+		ExportGerber
+			OutFile $CBName, $exportCutB
+			# Export bottom engrave layer?
+			If $exportEngraveFileB == $$YES
+				If $removeFlashes == $$YES
+					CALLMACRO _RemoveFlashesFromLayer, $exportEngraveB
+				End
+				CALLMACRO _FillFidAps, $exportEngraveB
+				OutFile $EBName, $exportEngraveB
+			End
+			IsEmptyLayer $gTxtB
+			If $$STATUS == $$FALSE
+				If $exportTxtFile == $$YES
+					OutFile $TxtBName, $gTxtB
+				End
+			End
+			IsEmptyLayer $gTxtOut20B
+			If $$STATUS == $$FALSE
+				CALLMACRO RAD_SegmentArcs, $exportTxtOut20B
+				OutFile $B20Name, $exportTxtOut20B
+			End
+			IsEmptyLayer $gAlignB
+			If $$STATUS == $$FALSE
+				OutFile $AlignBName, $gAlignB
+			End
+		End
+	End
+	If $gPasteLayers == 3
+		SplitPath $CTName, $tmp, $filename, $ext
+		StrWrite  $TCout, "%s.%s", $filename, $ext
+		Layern $exportCutT
+			LyrName   $TCout
+			Comments  $designerInfo
+		End
+		ExportGerber
+			OutFile $CTName, $exportCutT
+			# Export top engrave layer?
+			If $exportEngraveFileT == $$YES
+				If $removeFlashes == $$YES
+					CALLMACRO _RemoveFlashesFromLayer, $exportEngraveT
+				End
+				CALLMACRO _FillFidAps, $exportEngraveT
+				OutFile $ETName, $exportEngraveT
+			End
+			IsEmptyLayer $gTxtT
+			If $$STATUS == $$FALSE
+				If $exportTxtFile == $$YES
+					OutFile $TxtName, $gTxtT
+				End
+			End
+			IsEmptyLayer $gTxtOut20T
+			If $$STATUS == $$FALSE
+				CALLMACRO RAD_SegmentArcs, $exportTxtOut20T
+				OutFile $T20Name, $exportTxtOut20T
+			End
+			IsEmptyLayer $gAlignT
+			If $$STATUS == $$FALSE
+				OutFile $AlignTName, $gAlignT
+			End
+		End
+		If $gComboYesNo == $$NO
+			SplitPath $CBName, $tmp, $filename, $ext
+			StrWrite  $BCout, "%s.%s", $filename, $ext
+			Layern $exportCutB
+				LyrName   $BCout
+				Comments  $designerInfo
+			End
+			ExportGerber
+				OutFile $CBName, $exportCutB
+				# Export bottom engrave layer?
+				If $exportEngraveFileB == $$YES
+					If $removeFlashes == $$YES
+						CALLMACRO _RemoveFlashesFromLayer, $exportEngraveB
+					End
+					CALLMACRO _FillFidAps, $exportEngraveB
+					OutFile $EBName, $exportEngraveB
+				End
+				IsEmptyLayer $gTxtB
+				If $$STATUS == $$FALSE
+					If $exportTxtFile == $$YES
+						OutFile $TxtBName, $gTxtB
+					End
+				End
+				IsEmptyLayer $gTxtOut20B
+				If $$STATUS == $$FALSE
+					CALLMACRO RAD_SegmentArcs, $exportTxtOut20B
+					OutFile $B20Name, $exportTxtOut20B
+				End
+				IsEmptyLayer $gAlignB
+				If $$STATUS == $$FALSE
+					OutFile $AlignBName, $gAlignB
+				End
+			End
+		End
+	End
+	# Check if layer was assigned. If so then free layer.
+	If $exportCutT > -2
+		FreeTempLayer $exportCutT
+	End
+	If $exportEngraveT > -2
+		FreeTempLayer $exportEngraveT
+	End
+	If $exportTxtOut20T > -2
+		FreeTempLayer $exportTxtOut20T
+	End
+	If $exportCutB > -2
+		FreeTempLayer $exportCutB
+	End
+	If $exportEngraveB > -2
+		FreeTempLayer $exportEngraveB
+	End
+	If $exportTxtOut20B > -2
+		FreeTempLayer $exportTxtOut20B
+	End
+	# ******************** Squeegee Fids ********************
+	If $squeeFids # Check is squeegee fids should be added.
+		StrWrite $layerNameSFT, "%s Squeegee Side Fids", $gJobNumT
+		StrWrite $layerNameSFB, "%s Squeegee Side Fids", $gJobNumB
+		If $gPasteLayers == 1
+			SplitPath $CTName, $tmp, $filename, $ext
+			StrWrite  $TCout, "%s.%s", $filename, $ext
+			Layern $gCutT
+				LyrName   $TCout
+				Comments  $designerInfo
+			End
+			IsEmptyLayer $gEngraveT
+			If $$STATUS == $$FALSE
+				GetTempLayer $exportEngraveSqT,	$$LTOTHER
+				CopyLayer 	 $gEngraveT, $exportEngraveSqT
+				CALLMACRO _RemovePasteCorners, $exportEngraveSqT
+				CALLMACRO _FillFidAps, $exportEngraveSqT
+				ExportGerber
+					OutFile $SETName, $exportEngraveSqT
+				End
+			End
+		End
+		If $gPasteLayers == 2
+			SplitPath $CBName, $tmp, $filename, $ext
+			StrWrite  $BCout, "%s.%s", $filename, $ext
+			Layern $gCutB
+				LyrName   $BCout
+				Comments  $designerInfo
+			End
+			IsEmptyLayer $gEngraveB
+			If $$STATUS == $$FALSE
+				GetTempLayer $exportEngraveSqB,	$$LTOTHER
+				CopyLayer 	 $gEngraveB, $exportEngraveSqB
+				CALLMACRO _RemovePasteCorners, $exportEngraveSqB
+				CALLMACRO _FillFidAps, $exportEngraveSqB
+				ExportGerber
+					OutFile $SEBName, $exportEngraveSqB
+				End
+			End
+		End
+		If $gPasteLayers == 3
+			SplitPath $CTName, $tmp, $filename, $ext
+			StrWrite  $TCout, "%s.%s", $filename, $ext
+			Layern $gCutT
+				LyrName   $TCout
+				Comments  $designerInfo
+			End
+			IsEmptyLayer $gEngraveT
+			If $$STATUS == $$FALSE
+				GetTempLayer $exportEngraveSqT,	$$LTOTHER
+				CopyLayer 	 $gEngraveT, $exportEngraveSqT
+				CALLMACRO _RemovePasteCorners, $exportEngraveSqT
+				CALLMACRO _FillFidAps, $exportEngraveSqT
+				ExportGerber
+					OutFile $SETName, $exportEngraveSqT
+				End
+			End
+			If $gComboYesNo == $$NO
+				SplitPath $CBName, $tmp, $filename, $ext
+				StrWrite  $BCout, "%s.%s", $filename, $ext
+				Layern $gCutB
+					LyrName   $BCout
+					Comments  $designerInfo
+				End
+				IsEmptyLayer $gEngraveB
+				If $$STATUS == $$FALSE
+					GetTempLayer $exportEngraveSqB,	$$LTOTHER
+					CopyLayer 	 $gEngraveB, $exportEngraveSqB
+					CALLMACRO _RemovePasteCorners, $exportEngraveSqB
+					CALLMACRO _FillFidAps, $exportEngraveSqB
+					ExportGerber
+						OutFile $SEBName, $exportEngraveSqB
+					End
+				End
+			End
+		End
+	End
+	If $exportEngraveSqT > -2
+		FreeTempLayer $exportEngraveSqT
+	End
+	If $exportEngraveSqB > -2
+		FreeTempLayer $exportEngraveSqB
+	End
+	# ******************** Squeegee Fids End ********************
+	StrWrite $log, "Tannlin File Export Macro Complete %s", $$TIME
+	LogMessage 0, $log
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+ENDMACRO
+
+MACRO ExportEformFiles
+	# Imported from BRS_eform.mac
+	# Version written by Robbie Devennie 2024-09-27
+	# Reduced user interaction and added comments
+	Undo $$NO
+	Set $eformLayer	= 0
+	Set $fidLayer	= 0
+	Set $scanLayer	= 0
+	Set $layer		= $gModPasteT
+	# Set Scale Factors
+	Set $Under2MilsSF    = 0.9990
+	Set $Over2MilsSF     = 0.9991
+	Set $Under2MilsFidSF = 0.9994
+	Set $Over2MilsFidSF  = 0.9994
+	# Get Layer information
+	GetLayer $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	# Create Layer Names
+	StrWrite  $eformLayerName,	"%s_Eform",	 $gJobNumT
+	StrWrite  $fidLayerName,	"%s_Fids", 	 $gJobNumT
+	StrWrite  $scanLayerName,	"%s_Scan", 	 $gJobNumT
+	StrWrite  $squeegee,		"%s_Squeegee_View", $gJobNumT
+	# Copy Cut Layer to Eform Layer
+	GetFreeLayer $eformLayer
+	CopyLayer $gModPasteT, $eformLayer
+	# Copy Fid Layer to Eform Fid Layer
+	GetFreeLayer $fidLayer
+	CopyLayer $gFidT, $fidLayer
+	# Copy Fid and Cut Layers to Eform Scan Layer
+	GetFreeLayer $scanLayer
+	CopyLayer $gModPasteT, 	$scanLayer
+	CopyLayer $gFidT, 		$scanLayer
+	CopyLayer $gBorderT, 	$scanLayer
+
+	Set $thickness = $gThickT
+	If $thickness >= 2
+		Set $ScaleFactor  	= $Over2MilsSF
+		Set $FidScaleFactor = $Over2MilsFidSF
+	Else
+		Set $ScaleFactor  	= $Under2MilsSF
+		Set $FidScaleFactor = $Under2MilsFidSF
+	End
+	ScaleLayers
+		Layer $eformLayer
+		Scale $ScaleFactor, $ScaleFactor
+		Offsets 0, 0
+		Go
+	End
+	ScaleLayers
+		Layer $fidLayer
+		Scale $FidScaleFactor, $FidScaleFactor
+		Offsets 0, 0
+		Go
+	End
+	Set $dscale = 0
+	CALLMACRO GetScaleFactors, $thickness, $dscale
+	CALLMACRO AllOff
+	DcodeScale
+		Fixed $$YES
+		Scale $dscale, $dscale
+		By $$WINDOWMODE
+		Boundary $$YES
+		Flashes  $$YES
+		Draws 	 $$YES
+		Arcs 	 $$YES
+		Polys 	 $$YES
+		Text 	 $$YES
+		Layer 	 $eformLayer
+		Dcode 	 0
+		Go $lx,$ly, $ux,$uy
+	End
+	GetExtents $fidLayer, $lx, $ly, $ux, $uy
+	Calc $y = $uy + .5 # Not sure these do anything
+	Calc $x = -1.25 # Not sure these do anything
+	ActiveLayer $fidLayer
+	Set $rldcode = 10
+	GetFreeDcode $rldcode
+	GetDcodeInfo $rldcode, $shp, $cus, $x, $y, $type, $used, $flags, $scr
+	Set $shp   = $$ROUND
+	Set $xsize = 0.005
+	Set $ysize = 0.005
+	Set $type  = 0
+	PutDcodeInfo $rldcode, $shp, $cus, $xsize, $ysize, $type, $used, $flags, $scr
+	Text
+		Height		0.20
+		Width		0.10
+		Rotate		0
+		Slant		0
+		Mirror		$$NO
+		Font		"Stroke-Standard" # change to Tahoma in the future
+		LineSpace	1
+		CharSpace	1
+	End
+	Redline
+		Dcode $rldcode
+		Mode  0
+		Go $squeegee, $x, $y
+	End
+	# GetYesNo "Apply Band Etch to Layer?", $yesno
+	# If $yesno == $$YES
+	# 	CALLMACRO BRS_BandEtchPolys, $eformLayer
+	# End
+	# Add comments to export layers
+	StrWrite  $designerInfo, "Eform Layer: %s", $ln
+	Layern $layer
+		LyrName $ln
+		Comments $designerInfo
+	End
+	StrWrite $designerInfo, "Eform Layer: %s", $ln
+	Layern $eformLayer
+		LyrName $eformLayerName
+		Comments $designerInfo
+	End
+	StrWrite $designerInfo, "Eform Fiducial Layer: %s", $fidLayerName
+	Layern $fidLayer
+		LyrName $fidLayerName
+		Comments $designerInfo
+	End
+	StrWrite $designerInfo, "Eform Scan Layer: %s", $scanLayerName
+	Layern $scanLayer
+		LyrName $scanLayerName
+		Comments $designerInfo
+	End
+	# Exports
+	# Export the Eform Layer & the fid Layer without customs flattened
+	# Export the scan Layer with customs flattened
+	StrWrite $eformFileName, "%s.gbr", $eformLayerName
+	StrWrite $fidFileName, 	 "%s.gbr", $fidLayerName
+	StrWrite $scanFileName,  "%s.gbr", $scanLayerName
+	ExportFormat "Gerber"
+		Dialect         "RS274X"
+		M.N             2,4
+		Mode            "Absolute"
+		ZeroSuppression "Leading"
+		Terminator      "*\r\n"
+		CharSet         "ASCII"
+		Metric          $$NO
+		Modal           $$NO
+		Nets            $$NO
+		Userdata        $$YES
+		Gcmds           $$YES
+		Comments        $$YES
+		FlattenCustoms  $$NO
+	End
+	ExportGerber
+		OutFile $eformFileName,  $eformLayer
+		OutFile $fidFileName, $fidLayer
+	End
+	ExportFormat "Gerber"
+		FlattenCustoms $$YES
+	End
+	ExportGerber
+		OutFile $scanFileName, $scanLayer
+	End
+	
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+ENDMACRO

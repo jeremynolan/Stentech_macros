@@ -1,0 +1,62 @@
+MACRO _ClearLayerByOther
+	# Macro _ClearLayerByOther Written by Robbie Devennie on 2024-03-25
+	# This macro will use the extents of a layer given as variable $2 and use that to erase data on a layer given at variable $1
+	# Variabel $3 will determine whether clipping is outside or inside.
+	StrWrite $log, "_ClearLayerByOther Macro Called %s", $$TIME
+	LogMessage 0, $log
+	#* $1 = Layer to clip.
+	#* $2 = Layer to use as extents
+	#* $3 = Clip Style outside $$YES|NO
+	If $$CALLDEPTH == 0
+		Stop "Must be called from another macro."
+	End
+	GetExtents $2, $lx,$ly, $ux,$uy, $$YES
+	StrWrite $log, "Clip Layer = %.0n, Extents Layer = %.0n, Outside = %.0n", $1, $2, $3
+	# Adding margin calc to extents
+	Clip
+		Outside      $3
+		Type         0
+		By           $$WINDOWMODE
+		Boundary     $$NO
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$YES
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		Dcode        0
+		Tool         0
+		Layer        $1
+		Polarity     0
+		Go $lx,$ly, $ux,$uy
+	End
+ENDMACRO
+
+MACRO ClearUnusedLayers
+	# Macro ClearUnusedLayers Written by Robbie Devennie on 2024-04-09
+	Set $clearingLayer = 1
+	Repeat $clearingLayer < $$MAXLAYERS
+		If $clearingLayer != 10
+			CALLMACRO _ClearLayer, $clearingLayer, 1
+			Layern $clearingLayer
+				LyrName ""
+				Visibility 0
+			End
+		Else
+			Layern $clearingLayer
+				Visibility  1
+				FlashColor "0xff8080"
+				DrawColor  "0xc0c0c0"
+			End
+		End
+		Calc $clearingLayer = $clearingLayer + 1
+	End
+	ActiveLayer 10
+	ViewAll
+	Redraw
+ENDMACRO

@@ -1,0 +1,78 @@
+MACRO AddRailsandVscore
+	#This macro is design to add rails to the longer dimensions of  aboard outline and create v-scores for those rails to be removed
+	#Written October 26, 2016 by Stan M. Keightley Jr.
+	#Copyright 2016 WISE Software Solutions, Inc.
+	SET $brdr = 0
+	SET $vlayer = 0
+	SET $dcode = 0
+	SET $railW = .250
+	CALLMACRO _GetBoardProfileLyr, $brdr
+	CALLMACRO _GetVLyr, $vlayer
+	ACTIVELAYER $brdr
+	#Setup Aperture
+	CALLMACRO _GetFIrstBlankDcode, $dcode
+	GETDCODEINFO $dcode, $shp, $custom, $xs, $ys, $type, $usedcnt, $flags, $rot, $scratch
+	Set $shp = $$ROUND
+	Set $xs = .0005
+	PUTDCODEINFO
+	CURRENTDCODE $dcode
+	
+	GETEXTENTS $brdr, $lx, $ly, $ux, $uy, $$NO, $$NO
+	GETVALUE "Enter rail width:", $railW
+	#Check if Vertical or Horizontal
+	CALC $x = $ux - $lx
+	CALC $y = $uy - $ly
+	IF $x > $y
+		SET $vert = $$FALSE
+	ELSE
+		SET $vert = $$TRUE
+	END
+	IF $vert == $$FALSE
+		CALC $railY1 = $ly - $railW
+		CALC $railY2 = $uy + $railW
+		ADDRECT $lx, $railY1, $ux, $ly
+		ADDRECT $lx, $railY2, $ux, $uy
+		ACTIVELAYER $vlayer
+		ADDDRAW $lx, $ly, $ux, $ly
+		ADDDRAW $lx, $uy, $ux, $uy
+	ELSE
+		CALC $railX1 = $lx - $railW
+		CALC $railX2 = $ux + $railW
+		ADDRECT $railX1, $ly, $lx, $uy
+		ADDRECT $railX2, $ly, $ux, $uy
+		ACTIVELAYER $vlayer
+		ADDDRAW $lx, $ly, $lx, $uy
+		ADDDRAW $ux, $ly, $ux, $uy
+	END
+
+ENDMACRO
+MACRO _GetVLyr
+	Set $Repeat = $$YES
+	GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	Repeat $Repeat != $$NO
+		IF $type== $$LTVSCORE
+			Set $Repeat = $$NO
+			LAYERN $1
+				LYRNAME "V-Score"
+				TYPE $$LTVSCORE
+				FLASHCOLOR "green"
+				DRAWCOLOR "green"
+				Visibility 1 
+			END
+		END
+		IF $1 == $$MAXLAYERS
+			SET $vlayer = 0
+			GETFREELAYER $vlayer
+			LAYERN $1
+				LYRNAME "V-Score"
+				TYPE $$LTVSCORE
+				FLASHCOLOR "green"
+				DRAWCOLOR "green"
+				Visibility 1 
+			END
+			CALC $1 = $1 - 1
+		END
+		CALC $1 = $1 + 1
+		GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	END
+ENDMACRO

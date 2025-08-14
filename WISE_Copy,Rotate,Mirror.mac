@@ -1,0 +1,201 @@
+MACRO Copy,Rotate,Mirror
+	# This macro was written to speed up certain combinations of edits by chaining copy or move commands with rotation and mirror in sequence
+	# Version 1.0 
+	# Written by Stan M. Keightley Jr. 8.01.2017
+	# Copyright WISE Software Solutions, Inc.
+	SET $slayer = 0
+	SET $layer = $$ACTIVELAYER
+	SET $ctrX = 0
+	SET $ctrY = 0
+	CALLMACRO	_GetFirstEmptyLayer , $slayer
+	SET $FormId = -1
+	SET $Edit1 = -1
+	SET $Button1 = -1
+	SET $Button2 = -1
+	SET $Button3 = -1
+	SET $Static0 = -1
+	SET $Static1 = -1
+	SET $Static2 = -1
+	SET $DL = -1
+	SET $modechoice = 1
+	SET $DL2 = -1
+	SET $mirrorchoice = 1
+
+	SET $Button1Clicked = $$FALSE
+	SET $Button2Clicked = $$FALSE
+	SET $Button3Clicked = $$FALSE
+
+	STRARRAY $modes(3)
+	STRSET $modes(1), "Item"
+	STRSET $modes(2), "Window"
+	STRSET $modes(3), "Window + X-ing"
+	STRARRAY $mirror(3)
+	STRSET $mirror(1), "None"
+	STRSET $mirror(2), "Horizontal"
+	STRSET $mirror(3), "Vertical"
+	STRSET $EditStr1, "90"
+
+	DEFINEFORM 
+		FORMID		$FormId 
+		TITLE			"Copy & Rotate"
+		MARGIN		0.25
+		STATICTEXT		$Static1, 0.02, 0.05, .5, 0.25, "Mode:", $$FALSE
+		AddDropListControl 	$FormId, $DL,  0.55, 0, 1.1, 0.25, $modes, $modechoice
+
+		STATICTEXT		$Static1, 0.02, 0.385, 1.1, 0.25, "Degrees (CCW):", $$FALSE
+		EDITCONTROL	$Edit1,   1.15, .35, .5, 0.25, $EditStr1
+
+
+		STATICTEXT		$Static1, 0.02, 0.745, .5, 0.25, "Mirror:", $$FALSE
+		AddDropListControl 	$FormId, $DL2,  0.55, .7, 1.1, 0.25, $mirror, $mirrorchoice
+
+
+		STATICTEXT		$Static2, 0.02, 1.045, 1.85, 0.25, "Keep Original?", $$FALSE
+		BUTTONCONTROL	$Button1, 0, 1.32, 0.5, 0.35, "Yes", $Button1Clicked 
+		BUTTONCONTROL	$Button2, .5, 1.32, 0.5, 0.35, "No", $Button2Clicked 
+		BUTTONCONTROL	$Button3, 1, 1.32, 0.655, 0.35, "Cancel", $Button3Clicked
+
+	END
+
+	OpenForm $FormId
+
+	REPEAT $Button3Clicked == $$FALSE #Cancel
+
+		SET $xing = $$FALSE
+		IF $modechoice == 1
+			SET $mode = 0
+		END
+		IF $modechoice == 2
+			SET $mode = 1
+		END
+		IF $modechoice == 3
+			SET $mode = 1
+			SET $xing = $$TRUE		
+		END
+
+		SELECTGROUP
+			MODE	0
+			GO
+		END
+		IF $mode == 0
+			SELECTGROUP
+				MODE	1
+				By $mode
+				BOUNDARY $xing
+				REMOVETYPES 0
+				ADDTYPES $$DBFLASH
+				Layer $layer
+				Dcode 0 # Move all D-codes
+				Tool 0 # Move all tools
+				Polarity 0
+				GETPOINT "Select flash to Copy and Rotate", $x, $y
+				GO $x, $y
+			END
+		ELSE
+			SELECTGROUP
+				MODE	1
+				By $mode
+				BOUNDARY $xing
+				REMOVETYPES 0
+				ADDTYPES $$DBFLASH
+				Layer $layer
+				Dcode 0 # Move all D-codes
+				Tool 0 # Move all tools
+				Polarity 0
+				GetWindow "Window data to Copy and Rotate", $lx,$ly, $ux,$uy
+				GO $lx,$ly, $ux,$uy
+			END
+		END
+
+		IF $Button1Clicked == $$TRUE
+			COPY
+				By $$GROUPMODE
+				Polarity 0
+				Layer 0 # Copy from all visible
+				TOLAYER $slayer
+				GO 0,0,0,0
+			END
+		END
+		IF $Button2Clicked == $$TRUE
+			MOVE
+				By $$GROUPMODE
+				Polarity 0
+				Layer 0 # Copy from all visible
+				TOLAYER $slayer
+				GO 0,0,0,0
+			END
+
+		END
+		SELECTGROUP
+			MODE	0
+			GO
+		END
+		#Write Rotation to a value
+
+		STRREAD $EditStr1, "%n", $rot
+
+		GETEXTENTS $slayer, $lx, $ly, $ux, $uy, $$YES, $$YES
+		CALLMACRO "_GetCenter", $slayer, $ctrX, $ctrY
+		IF $rot != 0
+			ROTATE
+				DEGREES $rot
+				CENTERED $$YES
+				BY $$WINDOWMODE
+				BOUNDARY $$YES
+				FLASHES $$YES
+				LAYER $slayer
+				GO $lx, $ly, $ux, $uy
+			END
+		END
+		REDRAW
+		IF $mirrorchoice != 1
+			GETEXTENTS $slayer, $lx, $ly, $ux, $uy, $$YES, $$YES
+			CALLMACRO "_GetCenter", $slayer, $ctrX, $ctrY
+			IF $mirrorchoice == 2
+				MIRROR
+					DIRECTION 0 # horizontal
+					CENTERED $$YES
+					BY $$WINDOWMODE
+					BOUNDARY $$YES
+					FLASHES $$YES
+					LAYER $slayer
+					GO $lx, $ly, $ux, $uy
+				END
+			END
+			IF $mirrorchoice == 3
+				MIRROR
+					DIRECTION 1 # vertical
+					CENTERED $$YES
+					BY $$WINDOWMODE
+					BOUNDARY $$YES
+					FLASHES $$YES
+					LAYER $slayer
+					GO $lx, $ly, $ux, $uy
+				END
+			END
+			REDRAW
+		END
+		GETEXTENTS $slayer, $lx, $ly, $ux, $uy, $$YES, $$YES
+		MOVE
+			BY $$WINDOWMODE
+			BOUNDARY $$YES
+			Polarity 0
+			Layer $slayer # Copy from all visible
+			TOLAYER $layer
+			Dcode 0 # Copy all D-codes
+			Tool 0 # Copy all tools
+			INPLACE $$YES
+			GETPOINT "Enter new location for rotated item", $x, $y
+			GO $lx, $ly, $ux, $uy, $ctrX, $ctrY, $x, $y
+		END
+		#Setup for Repeat
+		SET $Button1 = -1
+		SET $Button2 = -1
+		SET $Button3 = -1
+		SET $Button1Clicked = $$FALSE
+		SET $Button2Clicked = $$FALSE
+		SET $Button3Clicked = $$FALSE
+		OpenForm $FormId
+	END
+
+ENDMACRO

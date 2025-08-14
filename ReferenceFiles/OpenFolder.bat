@@ -1,0 +1,1 @@
+start "Folder" "%~1"

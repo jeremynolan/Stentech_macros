@@ -1,0 +1,793 @@
+# To have VisualCAM automatically run a macro at startup time,
+# after opening a design, or after executing the File/New command,
+# name the macros OnStartup, OnOpen, or OnNew respectively.
+#
+#MACRO OnStartup
+#
+# your stuff here...
+#
+#ENDMACRO
+
+#MACRO OnOpen
+#
+# your stuff here...
+#
+#ENDMACRO
+
+#MACRO OnNew
+#
+# your stuff here...
+#
+#ENDMACRO
+
+MACRO FillAround
+
+	# This macro calculates the extent of the layers and places a box around this
+	# extent filled with cross hatching, on the active layer.
+
+	Set $layer = 1 				# counter
+
+	# initialize the variables.
+	Set $minx = 999999.0
+	Set $miny = 999999.0
+	Set $maxx = -999999.0
+	Set $maxy = -999999.0
+
+	# loop through all the layers to find the largest extent
+	REPEAT $layer <= $$MAXLAYERS
+		GETEXTENTS $layer, $lx, $ly, $ux, $uy
+
+		IF $lx < $minx
+			Set $minx = $lx
+		END
+		IF $ly < $miny
+			Set $miny = $ly
+		END
+		IF $ux > $maxx
+			Set $maxx = $ux
+		END
+		IF $uy > $maxy
+			Set $maxy = $uy
+		END
+
+		Calc $layer = $layer + 1 # increment loop control
+
+	END # of repeat
+
+	# calculate the size of the inner rectangle, make 0.5 inches larger than
+	# the extent
+	Calc $iminx = $minx - 0.5
+	Calc $iminy = $miny - 0.5
+	Calc $imaxx = $maxx + 0.5
+	Calc $imaxy = $maxy + 0.5
+
+	# calculate the size of the outer rectangle, make 3.0 inches larger than
+	# the extent
+	Calc $ominx = $minx - 3.0
+	Calc $ominy = $miny - 3.0
+	Calc $omaxx = $maxx + 3.0
+	Calc $omaxy = $maxy + 3.0
+
+	POUR
+		Border			0
+		FillMethod		1
+		FillType		1
+		Type			3
+		HatchLine	1, $$CURRENTDCODE, 0.35, 45	# current Dcode, 0.35 inch spacing, 45 deg 
+		HatchLine	2, $$CURRENTDCODE, 0.35, 135	# current Dcode, 0.35 inch spacing, 135 deg 
+		HatchLine	3, -1, 0.0, 0 		# only use 2 lines
+		Layer			0
+		DrawClr		0.02
+		FLashClr		0.02
+		OutlineDCode		$$CURRENTDCODE
+
+		# perform the pour.  The coordinates given represent a double rectangle
+		# about the extent of the data.  These rectangles are joined in the lower
+		# left corner by a double set of lines.  This enables the fill to work on
+		# just the area between the two rectangles and not attempt to fill any
+		# areas in the actual gerber area.
+
+		ADDPOUR $ominx,$ominy, $ominx,$omaxy, $omaxx,$omaxy, $omaxx,$ominy, $imaxx,$iminy, $imaxx,$imaxy, $iminx,$imaxy, $iminx,$iminy, $imaxx,$iminy, $omaxx,$ominy, $ominx,$ominy
+	END	# of pour
+ENDMACRO
+
+
+
+MACRO FlashToDraw
+
+	#
+	# This Macro will convert all RECTANGULAR flashes into drawn pads using
+	# the Poly Fill command.
+	#
+
+	# request a dcode to begin the fills with
+
+	REPEAT	$$STATUS == 0
+
+		GetValue			"Enter valid Fill Dcode:", $dc
+		CurrentDcode	$dc
+
+	END
+
+	# restrict the search to the active layer
+
+	SET $layer = $$ACTIVELAYER
+
+	# now loop thru active layer looking for rectangular flashes
+
+	GetFirstItem	$layer, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+
+	REPEAT	$$STATUS
+
+		IF	$type == $$DBFLASH
+
+			GETDCODEINFO $dcode, $shp, $cus, $xs, $ys, $type, $used, $flags, $scratch
+
+			Calc	$wby2 = $xs / 2
+			Calc	$hby2 = $ys / 2
+
+			IF $shp == $$RECTANGLE
+
+				# calculate pad extremes, add fill and delete old flash
+
+				Calc	$lx = $x - $wby2
+				Calc	$ly = $y - $hby2
+				Calc	$ux = $x + $wby2
+				Calc	$uy = $y + $hby2
+
+				AddFill			$lx,$ly, $lx,$uy, $ux,$uy, $ux,$ly, $lx,$ly
+
+				DeleteItem	$layer, $seqno
+
+			END
+
+		END
+
+		GetNextItem
+
+	END
+
+	Redraw
+
+ENDMACRO
+
+MACRO Pick-N-Place
+
+
+	# This macro will locate the center of a windowed set of pads and
+	# add a flash at that point. It then writes the XY value of that point and
+	# adds a user entered Reference Designator and Part Number and Rotation
+
+	GetString "Enter output filename:", $filename
+
+	Strlen	$filename
+
+	IF $$STATUS > 0
+
+		FileOpen	$fd, $filename, "w"
+		Set		$writing = $$STATUS
+
+	ELSE
+
+		Set 		$writing = $$FALSE
+	END
+
+	Set $$STATUS = 0
+
+	REPEAT	$$STATUS == 0
+
+		GetValue	"Enter Existing EMPTY Scratch Layer:", $slayer
+		ActiveLayer	$slayer
+
+	END
+
+	Set $$STATUS = 0
+
+	REPEAT	$$STATUS == 0
+
+		GetValue   	"Enter Input Layer:", $layer
+		ActiveLayer	$layer
+
+	END
+
+	Set $$STATUS = 0
+
+	REPEAT	$$STATUS == 0
+
+		GetValue   	"Enter Centroid Marker Dcode:", $dc
+		CurrentDcode	$dc
+
+	END
+
+	# the current dcode is now correctly set
+
+	Set $$STATUS = 0
+
+	REPEAT	$$STATUS == 0
+
+		GetValue	"Enter Centroid Marker Layer:", $olayer
+		LAYERN $olayer 
+			Visibility 1 # turn on the layer’s visibility
+		END
+		ActiveLayer    	$olayer
+
+	END
+
+	# the active layer is now correctly set and visible
+
+	SELECTGROUP
+
+		# set the selection criteria outside of the main repeat loop
+
+		By	   $$WINDOWMODE
+		Flashes  $$TRUE
+		Draws	   $$FALSE
+		Arcs	   $$FALSE
+		Polys	   $$FALSE
+		Polarity   1
+		Layer	   $layer
+
+	END
+
+	REPEAT $$TRUE
+
+		GetWindow "Enter Component Window", $lx,$ly, $ux,$uy
+
+		SELECTGROUP
+
+			MODE	0
+			GO
+
+			MODE	1
+			GO  	$lx,$ly,$ux,$uy
+
+		END
+
+		IF $$SELGRPCNT > 0
+
+			COPY
+
+				By	$$GROUPMODE
+				Tolayer	$slayer
+
+				GO	0,0, 0,0
+
+			END
+
+			Set	$minx = 100000.0
+			Set	$miny = 100000.0
+			Calc	$maxx = -100000.0
+			Calc	$maxy = -100000.0
+
+			Set	$layer = $slayer	# restrict the select search to the scratch layer
+
+			GetFirstItem	$layer, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+
+			REPEAT	$$STATUS
+
+				IF	$type == $$FLASH
+
+					IF $x < $minx
+
+						Set $minx = $x
+
+					END
+
+					IF $x > $maxx
+
+						Set $maxx = $x
+
+					END
+
+					IF $y < $miny
+
+						Set $miny = $y
+
+					END
+
+					IF $y > $maxy
+
+						Set $maxy = $y
+
+					END
+
+				END
+
+				DeleteItem	$layer, $seqno
+
+				GetNextItem
+
+			END
+
+			Calc	$d = $maxx - $minx
+			Calc	$d = $d / 2
+			Calc	$cx = $minx + $d
+
+			Calc	$d = $maxy - $miny
+			Calc	$d = $d / 2
+			Calc	$cy = $miny + $d
+
+			IF $writing
+
+				GetString	"Enter Ref Desg:", $ref
+				GetString	"Enter Part No:", $pn
+				GetValue	"Enter Rotation:", $rot
+
+				FileWrite	$fd, "REF:%s X%2.3n Y%2.3n ROT:%3.2n PN:%s", $ref,  $cx, $cy, $rot, $pn
+
+			END
+
+			AddFlash	$cx,$cy
+			REDRAW
+
+		END
+
+	END
+
+	IF $writing
+
+		FileClose $fd
+
+	END
+
+ENDMACRO
+
+
+
+MACRO BatchPlot
+
+	# This macro allows you to batch plot the visible layers
+	# one layer at a time.
+
+	# Since each layers netid value is used to temporarily store the original
+	# visibility of the layer we must warn the user that any possible netlist
+	# info will be lost.
+
+	GetYesNo  "This macro will erase any previous netlist info! Continue?",$yesno
+
+	IF $yesno == $$NO
+		STOP
+	END
+
+	SET $Layer = $$MAXLAYERS
+
+	REPEAT $Layer > 0 				# turn off all layers
+
+		ActiveLayer		$Layer		# returns bad status if layer doesn't exist
+
+		IF $$STATUS
+
+			GetLayer $Layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$pol,$key,$ft,$lx,$ly,$ux,$uy,$netid
+
+			LAYERN $Layer
+				Netid		$vis	# save true visibility
+				Visibility	0
+			END
+
+		END
+		CALC $Layer = $Layer - 1
+	END
+
+	REDRAW
+
+	SET $Layer = $$MAXLAYERS
+
+
+
+
+	REPEAT $Layer > 0
+
+		ActiveLayer		$Layer
+
+		IF $$STATUS
+
+			GetLayer $Layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$pol,$key,$ft,$lx,$ly,$ux,$uy,$netid
+
+			IF $netid > 0		# it was visible
+
+
+				STRSET 	$plotname, "bplot"   			# change this to suit your needs...
+				STRWRITE 	$LayerNumber, "%n",  $Layer	# Use this to set your layer name manually 
+				STRCAT 	$plotname, $LayerNumber		# and append layer numbers to the name
+
+				#STRSET	$plotname, ""				# Clears $plotname
+				#STRCAT	$plotname, $ln			# Sets plotname to the current layer's name (Use only if layers are named)
+				#STRCAT 	$plotname, ".plt"			# Appends .plt extension
+
+				LAYERN $Layer
+					Visibility	1
+				END
+
+				REDRAW
+
+				PLOTHPGL
+					OUTFILE $plotname	
+					SCALE 1.0
+					GO 0, 0, 0, 0
+				END
+
+				LAYERN $Layer
+					Visibility	0
+				END
+
+			END
+
+		END
+
+		CALC $Layer = $Layer - 1
+
+	END
+
+	SET $Layer = $$MAXLAYERS
+
+	REPEAT $Layer > 0 				# turn off all layers
+
+		ActiveLayer		$Layer		# returns bad status if layer doesn't exist
+
+		IF $$STATUS
+
+			GetLayer $Layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$pol,$key,$ft,$lx,$ly,$ux,$uy,$netid
+
+			IF $netid > 0		# it was visible
+
+				LAYERN $Layer
+					Visibility	$netid	# restore visibility
+					Netid		0
+				END
+
+			END
+
+		END
+
+		CALC $Layer = $Layer - 1
+	END
+
+	REDRAW
+
+ENDMACRO
+
+MACRO SetLayerColors
+
+	# This macro Sets the colors of layers 1 through 8 to user defined values.
+	# Currently the best way to use this macro is to assign it to a function
+	# key which is used after loading in a new design.
+	#
+	# If desired, other things can be done in each layer block such as setting the 
+	# layer types or initial visibility.
+
+	LAYERN 1
+		FLASHCOLOR "Blue"
+		DRAWCOLOR  "Blue"
+	END
+
+	LAYERN 2
+		FLASHCOLOR "Green"
+		DRAWCOLOR  "Green"
+	END
+
+	LAYERN 3
+		FLASHCOLOR "Cyan"
+		DRAWCOLOR  "Cyan"
+	END
+
+	LAYERN 4
+		FLASHCOLOR "Red"
+		DRAWCOLOR  "Red"
+	END
+
+	LAYERN 5
+		FLASHCOLOR "Yellow"
+		DRAWCOLOR  "Yellow"
+	END
+
+	LAYERN 6
+		FLASHCOLOR "Magenta"
+		DRAWCOLOR  "Magenta"
+	END
+
+	LAYERN 7
+		FLASHCOLOR "Brown"
+		DRAWCOLOR  "Brown"
+	END
+
+	LAYERN 8
+		FLASHCOLOR "vga16Gray"
+		DRAWCOLOR  "vga16Gray"
+	END
+
+	REDRAW
+
+ENDMACRO
+
+MACRO Step-N-Repeat
+
+	# This macro performs a step and repeat of windowed objects
+
+
+	COPY
+
+		By		$$WINDOWMODE
+		Boundary 	$$YES
+		Flashes	$$YES
+		Draws		$$YES
+		Arcs		$$YES
+		Polys		$$YES
+		Polarity	0
+		Layer		0
+		Dcode		0
+
+		# Get user parameters
+		GetValue		"Enter number of copies:",$copies
+		GetWindow		"Enter Copy Window",$lx,$ly,$ux,$uy
+		GetPoint		"Enter from location", $fx,$fy
+		GetPoint		"Enter to location", $tx,$ty
+
+		# Calculate the offsets
+		Calc $dx = $tx - $fx
+		Calc $dy = $ty - $fy
+
+		REPEAT $copies > 0
+			GO				$lx,$ly,$ux,$uy,  $fx,$fy, $tx, $ty 	# do the copy
+
+			Calc $tx = $tx + $dx				# add in the offsets
+			Calc $ty = $ty + $dy
+
+			Calc $copies = $copies - 1		# decrement the counter
+
+			IF $$STATUS == 0	# nothing was copied.  Stop processing
+				STOP		"copy failed..."
+			END					# end of if
+		END						# end of if
+	END							# end of copy
+ENDMACRO
+
+MACRO Window_Panes
+
+	# This macro was designed to assist in the automatic conversion of smt pad shapes for stencil design purposes.
+	# It is intenede to convert Square and Rectangular shapes.
+	# MACRO _GetFirstBlankDcode written by John Dingley, JD Photo-Tool
+	# Current Version Written by Stan Keightley, WISE Software Solutions, Copyright 2002
+	#Updated 12/16/02 by Stan Keightley to include auto convert of all selected D-code
+
+	SET	$TEMP1 = 0
+	SET	$$STATUS = 0
+
+	REPEAT	$$STATUS == 0
+
+		GetValue   	"Enter Input Layer:", $layer
+		ActiveLayer	$layer
+
+	END
+
+	Set $$STATUS = 0
+
+	REPEAT	$$STATUS == 0
+
+		GetValue	"Enter Existing EMPTY Scratch Layer:", $slayer
+		ActiveLayer	$slayer
+
+	END
+
+
+	SELECTGROUP
+
+		# set the selection criteria outside of the main repeat loop
+
+		By		$$ITEMMODE
+		Flashes	$$TRUE
+		Draws		$$FALSE
+		Arcs		$$FALSE
+		Polys 		$$FALSE
+		Polarity	1	
+		DCODE	0
+		Layer		$layer
+
+	END
+
+	REPEAT $$TRUE
+
+		GetPoint "Click on Square or Rectangular Pad to be converted:", $itemx,$itemy
+
+		SELECTGROUP
+
+			MODE	0
+			GO
+
+			MODE	1
+			GO  	$itemx,$itemy
+
+		END
+
+		IF $$SELGRPCNT > 0
+
+			COPY
+
+				By	$$GROUPMODE
+				Tolayer	$slayer
+				GO	0,0,0,0
+
+			END
+
+			GetValue	"Enter Gap Size:", $routeamt
+
+			Calc	$halfrtamt = $routeamt /2
+
+			#Set	$layer = $slayer	# restrict the select search to the scratch layer
+
+			GetFirstItem	$slayer, $seqno, $net, $origdcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+
+			REPEAT	$$STATUS
+
+				IF	$type == $$FLASH
+
+					GETDCODEINFO $origdcode, $shp, $cus, $origxsize, $origysize, $type, $used, $flags, $scratch
+
+					Calc	$halforigX = $origxsize / 2
+					Calc	$halforigY = $origysize / 2
+					Calc 	$newDx = $halforigX - $halfrtamt
+					Calc	$newDy = $halforigY - $halfrtamt
+
+					CALLMACRO	_GetFirstBlankDcode , $TEMP1
+
+					Calc	$newDcode = $TEMP1
+
+					GETDCODEINFO $newDcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+
+					PUTDCODEINFO $newDcode, $$RECTANGLE, $cus, $newDx, $newDy, $type, $used, $flags, $scratch
+
+					CURRENTDCODE	$newDcode
+
+					DeleteItem	$slayer, $seqno
+
+					GETYESNO 	"Choose YES to convert all of the selected dcode or NO to convert only the selected item.", $yesno
+
+					IF	$yesno == $$YES
+
+						activelayer = $layer
+
+						GetFirstItem	$layer, $scanseqno, $net, $scandcode, $scantype, $x, $y, $x2, $y2, $dia, $cw, $flags
+
+						REPEAT	$$STATUS			
+							IF	$scandcode == $origdcode
+
+								#Calculating new placement from getfirstitem and scandcode info
+								Calc	$origlx  =  $x - $halforigX
+								Calc	$origly = $y - $halforigY					
+								Calc	$halfnewDx = $newDx / 2					
+								Calc	$halfnewDy = $newDy / 2 
+
+								#Getting left X coordinate
+								Calc	$newLx = $origlx + $halfnewDx
+
+								#Getting right X coordinate
+								Calc	$newRx = $newLx + $newDx
+								Calc	$newRx = $newRx + $routeamt
+
+								#Getting lower Y coordinate
+								Calc	$newLy = $origly + $halfnewDy
+
+								#Getting upper Y coordinate
+								Calc	$newUy = $newLy + $newDy			
+								Calc	$newUy = $newUy + $routeamt
+
+								CURRENTDCODE	$newDcode
+
+								#Add new dcode to the four new locations to create the converted shape.
+
+								ActiveLayer	$layer
+
+								ADDFLASH	$newLx, $newLy, $newLx, $newUy, $newRx, $newLy, $newRx, $newUy
+
+								DeleteItem	$layer, $scanseqno
+							END
+							GetNextItem							
+						END
+					Else
+						#Calculating new placement from getfirstitem and scandcode info
+						Calc	$origlx  =  $x - $halforigX
+						Calc	$origly = $y - $halforigY					
+						Calc	$halfnewDx = $newDx / 2					
+						Calc	$halfnewDy = $newDy / 2 
+
+						#Getting left X coordinate
+						Calc	$newLx = $origlx + $halfnewDx
+
+						#Getting right X coordinate
+						Calc	$newRx = $newLx + $newDx
+						Calc	$newRx = $newRx + $routeamt
+
+						#Getting lower Y coordinate
+						Calc	$newLy = $origly + $halfnewDy
+
+						#Getting upper Y coordinate
+						Calc	$newUy = $newLy + $newDy			
+						Calc	$newUy = $newUy + $routeamt
+
+						CURRENTDCODE	$newDcode
+
+						#Add new dcode to the four new locations to create the converted shape.
+						ActiveLayer	$layer
+
+						ADDFLASH	$newLx,$newLy , $newLx,$newUy , $newRx,$newLy , $newRx,$newUy
+
+						ERASE
+							By	$$ITEMMODE
+							FLASHES	$$TRUE
+							DRAWS	$$FALSE
+							ARCS		$$FALSE
+							DRILLS	$$FALSE
+							SLOTS		$$FALSE
+							DCODE	$origdcode
+							LAYER 	$layer
+							GO		$x, $y
+							REDRAW
+						END
+						GetNextItem
+					END
+				END
+			END
+		END
+		REDRAW
+	END
+ENDMACRO
+
+MACRO ConvertNestedPolygonsToVoids
+	#  This is a special "behind the scenes command" which processes polygon data in order to de-embed voids.
+	#  This command is not undo-able and experimentation with the "merge polygons" option during the import of gerber files is recommended.
+	#  YES means run on all polys, polylines, draws and flashes. NO means run only raster polys.
+	SET $slayer = 0
+
+	MESSAGEBOX "ConvertNestedPolygonsToVoids", "This macro will attempt to convert nested polygons to voids on the specified layer. Processed data will be copied and processed on a new layer. This command cannot be undone. Continue?", 2, 1 # default to the 'Yes' button.
+	IF $$STATUS == $$NO
+		STOP
+	END
+
+	CALLMACRO	_GetFirstEmptyLayer , $slayer
+
+	GetValue   	"Layer to process:", $layer
+
+	COPYLAYER $layer, $slayer
+
+	GetYesNo  "Choose YES to process all polys, polylines, draws and flashes. Choose NO to process raster polys only.",$yesno
+
+	RunUID 1000, $slayer, $yesno #special "behind the scenes" command
+
+	STOP "Nested Polygon Conversion Complete"
+
+ENDMACRO
+
+MACRO _GetFirstEmptyLayer
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	SET $LAY=1
+	SET $$STATUS = $$TRUE
+	REPEAT $$STATUS == $$TRUE
+		GETFIRSTITEM $LAY,$SEQ,$NET,$DCODE,$TYPE,$XS,$YS,$XS2,$YS2,$DIA,$CLK,$FLAG
+		IF $$STATUS ==$$FALSE
+			SET $1=$LAY
+		END
+		CALC $LAY=$LAY+1
+	END
+ENDMACRO
+
+
+MACRO _GetFirstBlankDcode
+
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+
+	Set $1 = 10
+	Set $nLyrno = $$ACTIVELAYER
+	Set $$STATUS = $$TRUE
+
+	REPEAT $$STATUS == $$TRUE
+
+		Calc $1 = $1 + 1
+		GetApInfo $nLyrno, $1, $shp, $xs, $ys, $type, $tool, $toolsize, $legend
+
+	END
+ENDMACRO
+

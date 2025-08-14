@@ -1,0 +1,246 @@
+MACRO CADmaticToggle
+	# Macro CADmaticToggle Written by Designer on 2025-02-04
+	StrWrite $log, "CADmaticToggle MACRO Called %s", $$TIME
+	LogMessage 0, $log
+
+	If $gCADmatic
+		Set $gCADmatic = $$NO
+		StrWrite $log, "CADmatic disabled", $$TIME
+		LogMessage 0, $log
+	Else
+		Set $gCADmatic = $$YES
+		StrWrite $log, "CADmatic enabled", $$TIME
+		LogMessage 0, $log
+	End
+ENDMACRO
+
+MACRO RAD_AreaRatioThresholdReport
+	# Macro RAD_AreaRatioThresholdReport Written by Designer on 2025-02-05
+	StrWrite $log, "RAD_AreaRatioThresholdReport MACRO Called %s", $$TIME
+	LogMessage 0, $log
+
+	# Set variables
+	Set $controlId01      = 1
+	Set $controlId02      = 1
+	Set $controlId03      = 1
+	Set $controlId04      = 1
+	Set $controlId05      = 1
+	Set $controlId06      = 1
+	Set $okBtnControl     = 1
+	Set $cancelBtnControl = 1
+	Set $formId           = 1
+	Set $margin           = 0.4
+
+	# Set strings
+	StrSet $lowARstring, "0.6"
+	StrSet $midARstring, "0.8"
+	StrSet $layerstring, "12"
+	StrSet $formTitle,   "Area Ratio Threshold Report"
+	StrSet $staticText1, "Low Area Ratio Threshold"
+	StrSet $staticText2, "Mid Area Ratio Threshold"
+	StrSet $staticText3, "Layer"
+
+	DefineForm
+		FormId $formId
+		Title  $formTitle
+		Margin $margin
+		StaticText      $controlId01,      0.00, 0.00, 2.00, 0.50, $staticText1, $$FALSE
+		StaticText      $controlId02,      0.00, 0.60, 3.00, 0.50, $staticText2, $$FALSE
+		StaticText      $controlId03,      0.00, 1.20, 2.00, 0.50, $staticText3, $$FALSE
+		EditControl     $controlId04,      2.00, 0.00, 1.00, 0.30, $lowAR,       $$FALSE
+		EditControl     $controlId05,      2.00, 0.60, 1.00, 0.30, $midAR,       $$FALSE
+		EditControl     $controlId06,      2.00, 1.20, 1.00, 0.30, $layer,       $$FALSE
+		ButtonControl   $okBtnControl,     0.00, 1.80, 1.00, 0.50, "OK",         $$FALSE
+		ButtonControl   $cancelBtnControl, 1.20, 1.80, 1.00, 0.50, "Cancel",     $$FALSE
+	End
+
+	OpenForm $formId
+	If $OK
+		StrWrite $log, "OK Button pressed", $$TIME
+		LogMessage 0, $log
+
+		StrRead $lowARstring, "\n", $lowAR
+		StrRead $midARstring, "\n", $midAR
+		StrRead $layerstring, "\n", $layer
+		# Create temp layers
+		GetTempLayer $tempLayer, $$LTOTHER
+		GetTempLayer $tempLayerLowAR, $$LTOTHER
+		GetTempLayer $tempLayerMidAR, $$LTOTHER
+		GetTempLayer $tempLayerHighAR, $$LTOTHER
+		# Copy layer to temp layer
+		CopyLayer $layer, $tempLayer
+		GetFirstItem $tempLayer, $seqNo, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+
+		# Free temp layers
+		FreeTempLayer $tempLayer
+		FreeTempLayer $tempLayerLowAR
+		FreeTempLayer $tempLayerMidAR
+		FreeTempLayer $tempLayerHighAR
+	End
+
+ENDMACRO
+
+MACRO DRC_Check
+	# Macro DRC_Check Written by Designer on 2025-03-04
+	StrWrite $log, "DRC_Check MACRO Called %s", $$TIME
+	LogMessage 0, $log
+	# Save job in case of crash
+	SaveAs $$DSNNAME
+	# Clear Analysis
+	DeleteAnalysisErrors
+	# Calculate spacing
+	Calc $spacingT = $gThickT * 0.0015
+	Calc $spacingB = $gThickB * 0.0015
+	# Paste to paste
+	PasteToPaste $spacingT, $spacingT, 0 # Top
+	PasteToPaste $spacingB, $spacingB, 1 # Bottom
+
+ENDMACRO
+
+macro ImportCheck
+	# Macro ImportCheck Written by Designer on 2025-03-04
+	StrWrite $log, "ImportCheck MACRO Called %s", $$TIME
+	LogMessage 0, $log
+
+	# ImportCheck
+	# PadRemoval
+	#     Type            $string
+	#     Layer           $layer
+	#     DCode           $dCode
+	#     WindowMode      $$YES|NO
+	#     DrilledPadsOnly $$YES|NO
+	#     ThruHoleLayer   exp
+	#     Tolerance       exp
+	#     Go              $lx,$ly, $ux,$uy
+	# End
+ENDMACRO
+
+MACRO CADmaticToggle
+	# Macro CADmaticToggle Written by Designer on 2025-02-04
+	StrWrite $log, "CADmaticToggle MACRO Called %s", $$TIME
+	LogMessage 0, $log
+
+	If $gCADmatic
+		Set $gCADmatic = $$NO
+		StrWrite $log, "CADmatic disabled", $$TIME
+		LogMessage 0, $log
+	Else
+		Set $gCADmatic = $$YES
+		StrWrite $log, "CADmatic enabled", $$TIME
+		LogMessage 0, $log
+	End
+
+ENDMACRO
+
+MACRO RAD_AreaRatioThresholdReport
+	# Macro RAD_AreaRatioThresholdReport Written by Designer on 2025-02-05
+	StrWrite $log, "RAD_AreaRatioThresholdReport MACRO Called %s", $$TIME
+	LogMessage 0, $log
+
+	# Set variables
+	Set $controlId01      = 1
+	Set $controlId02      = 1
+	Set $controlId03      = 1
+	Set $controlId04      = 1
+	Set $controlId05      = 1
+	Set $controlId06      = 1
+	Set $okBtnControl     = 1
+	Set $cancelBtnControl = 1
+	Set $formId           = 1
+	Set $margin           = 0.4
+
+	# Set strings
+	StrSet $lowARstring, "0.6"
+	StrSet $midARstring, "0.8"
+	StrSet $layerstring, "12"
+	StrSet $formTitle,   "Area Ratio Threshold Report"
+	StrSet $staticText1, "Low Area Ratio Threshold"
+	StrSet $staticText2, "Mid Area Ratio Threshold"
+	StrSet $staticText3, "Layer"
+
+	DefineForm
+		FormId $formId
+		Title  $formTitle
+		Margin $margin
+		StaticText      $controlId01,      0.00, 0.00, 2.00, 0.50, $staticText1, $$FALSE
+		StaticText      $controlId02,      0.00, 0.60, 3.00, 0.50, $staticText2, $$FALSE
+		StaticText      $controlId03,      0.00, 1.20, 2.00, 0.50, $staticText3, $$FALSE
+		EditControl     $controlId04,      2.00, 0.00, 1.00, 0.30, $lowAR,       $$FALSE
+		EditControl     $controlId05,      2.00, 0.60, 1.00, 0.30, $midAR,       $$FALSE
+		EditControl     $controlId06,      2.00, 1.20, 1.00, 0.30, $layer,       $$FALSE
+		ButtonControl   $okBtnControl,     0.00, 1.80, 1.00, 0.50, "OK",         $$FALSE
+		ButtonControl   $cancelBtnControl, 1.20, 1.80, 1.00, 0.50, "Cancel",     $$FALSE
+	End
+
+	OpenForm $formId
+	If $OK
+		StrWrite $log, "OK Button pressed", $$TIME
+		LogMessage 0, $log
+
+		StrRead $lowARstring, "\n", $lowAR
+		StrRead $midARstring, "\n", $midAR
+		StrRead $layerstring, "\n", $layer
+		# Create temp layers
+		GetTempLayer $tempLayer, $$LTOTHER
+		GetTempLayer $tempLayerLowAR, $$LTOTHER
+		GetTempLayer $tempLayerMidAR, $$LTOTHER
+		GetTempLayer $tempLayerHighAR, $$LTOTHER
+		# Copy layer to temp layer
+		CopyLayer $layer, $tempLayer
+		GetFirstItem $tempLayer, $seqNo, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+
+		# Free temp layers
+		FreeTempLayer $tempLayer
+		FreeTempLayer $tempLayerLowAR
+		FreeTempLayer $tempLayerMidAR
+		FreeTempLayer $tempLayerHighAR
+	End
+
+ENDMACRO
+
+MACRO DRC_Check
+	# Macro DRC_Check Written by Designer on 2025-03-04
+	StrWrite $log, "DRC_Check MACRO Called %s", $$TIME
+	LogMessage 0, $log
+	# Save job in case of crash
+	SaveAs $$DSNNAME
+	# Clear Analysis
+	DeleteAnalysisErrors
+	# Calculate spacing
+	Calc $spacingT = $gThickT * 0.0015
+	Calc $spacingB = $gThickB * 0.0015
+	# Paste to paste
+	PasteToPaste $spacingT, $spacingT, 0 # Top
+	PasteToPaste $spacingB, $spacingB, 1 # Bottom
+
+ENDMACRO
+
+macro ImportCheck
+	# Macro ImportCheck Written by Designer on 2025-03-04
+	StrWrite $log, "ImportCheck MACRO Called %s", $$TIME
+	LogMessage 0, $log
+
+	# ImportCheck
+	# PadRemoval
+	#     Type            $string
+	#     Layer           $layer
+	#     DCode           $dCode
+	#     WindowMode      $$YES|NO
+	#     DrilledPadsOnly $$YES|NO
+	#     ThruHoleLayer   exp
+	#     Tolerance       exp
+	#     Go              $lx,$ly, $ux,$uy
+	# End
+ENDMACRO
+
+MACRO JsonTest
+	# Macro JsonTest Written by Designer on 2025-03-07
+	StrWrite $log, "JsonTest MACRO Called %s", $$TIME
+	LogMessage 0, $log
+	# Set the json file
+	StrSet $jsonFile, "C:\\CADmatic\\NewJob.json" # Set Json File to be written to
+	# jq '.rbData.preCADEngineerID = 210.0000' "C:\CADmatic\NewJob.json" > "C:\CADmatic\NewJob.json.tmp" && cmd /c move /Y "C:\CADmatic\NewJob.json.tmp" "C:\CADmatic\NewJob.json"
+	StrWrite $cmd, "C:\\ProgramData\\WISE Software Solutions\\VisualCAM 16.9\\macros\\ReferenceFiles\\updateJson.bat %s %s %s", $jsonFile, ".rbData.preCADEngineerID", "210"
+	LogMessage 0, $cmd
+	SysCmd $cmd # run command
+ENDMACRO

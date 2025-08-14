@@ -1,0 +1,160 @@
+MACRO WISE_QuickText
+	# This macro was designed to assist in the automatic markup of smt pad shapes for stencil design communication purposes.
+	# Current Version Written by Stan Keightley, WISE Software Solutions, Copyright 2012-2024
+	###########################
+	SET $rpt = $$YES
+	SET $layer = $$ACTIVELAYER
+	SET $slayer = 0
+	SET $rldcode = 10
+	########################
+	GETFREELAYER $slayer
+
+	#Creating redline Dcode
+	GETFREEDCODE  $rldcode
+	GETDCODEINFO $rldcode, $shp, $cus, $x, $y, $typ, $used, $flags, $scr
+	SET $shp = $$ROUND
+	SET $xsize = .01
+	SET $ysize = .01
+	SET $typ = 0
+	PUTDCODEINFO $rldcode, $shp, $cus, $xsize, $ysize, $typ, $used, $flags, $scr
+	SELECTGROUP
+		REMOVETYPES 0
+	END
+	REPEAT $rpt == $$YES
+		GETWINDOW "Window around one or two flashed pads:" , $winX1, $winY1, $winX2, $winY2
+		GETPOINT "Enter text loc", $textX, $textY
+		SELECTGROUP
+			MODE	0
+			GO
+		END
+		SELECTGROUP
+
+			MODE	1
+			By		$$WINDOWMODE
+			Boundary	$$NO
+			Flashes	$$TRUE
+			Draws		$$FALSE
+			Arcs		$$FALSE
+			Polys		$$FALSE
+			DCODE	0
+			Layer		$layer
+			GO  		$winX1, $winY1, $winX2, $winY2
+
+		END
+		IF $$SELGRPCNT > 0
+			IF $$SELGRPCNT > 2
+				MESSAGEBOX "QuickText", "More than two pads were selected", 0
+			ELSE
+
+				COPY
+					By		$$GROUPMODE
+					Tolayer	$slayer
+					GO		0,0,0,0
+				END
+
+				#Calc and add redline Text and box
+				GETFIRSTITEM $slayer, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+				GETDCODEINFO $dcode, $shp, $custom, $xs, $ys, $type, $usedcnt, $flags, $rot, $scratch
+				SET $x1 = $x
+				SET $y1 = $y
+				SET $seqno1 = $seqno
+				#Convert to mils
+				IF $rot == 90
+					CALC $milxs = $ys * 1000
+					CALC $milys = $xs * 1000
+				ELSE
+					CALC $milxs = $xs * 1000
+					CALC $milys = $ys * 1000
+				END
+				IF $$SELGRPCNT > 1
+					GETNEXTITEM
+					SET $x2 = $x
+					SET $y2 = $y
+					SET $seqno2 = $seqno
+					#Determine orientation
+					CALLMACRO _FuzzyTest, $x1, $x2, $x
+					IF $x == 1	# The pads are vertical...
+						CALLMACRO _AbsDiff, $y1, $y2, $y
+						SET $pitch = $y	
+						CALC $pitch = $pitch * 1000 # convert to mils
+					ELSE # The pads are horizontal...
+						CALLMACRO _AbsDiff, $x1, $x2, $x
+						SET $pitch = $x					
+						CALC $pitch = $pitch * 1000 # convert to mils
+					END
+					IF $shp==0
+						STRWRITE $text, "%3.1n %1s %2s %2s %3.1n",  $milxs, "dia.", "\n", "P:", $pitch
+					ELSE
+
+						STRWRITE $text, "%3.1n %1s %3.1n %2s %2s %3.1n",  $milxs, "x", $milys, "\n", "P:", $pitch
+					END
+				ELSE
+					IF $shp==0
+						STRWRITE $text, "%3.1n %1s",  $milxs, "dia."
+					ELSE
+
+						STRWRITE $text, "%3.1n %1s %3.1n", $milxs, "x",  $milys
+					END
+				END
+				REDLINE
+					DCODE $rldcode
+					TEXT
+						Height		0.20
+						Width		0.10
+						Rotate		0
+						Slant		0
+						Mirror		$$NO
+						Font		"Stroke-Stencil"
+						LineSpace	1
+						CharSpace	1
+						GO "test"	# this will be ignored within a Redline block
+					END
+					MODE	2
+					GO $text, $x1, $y1, $textX, $textY
+
+				END
+				#Delete copied data
+				ERASE
+					By $$WINDOWMODE
+					Flashes $$YES
+					Layer $slayer
+					Dcode 0 # Erase all D-codes
+					Tool 0 # Erase all tools
+					Polarity 0
+					GO $winX1, $winY1, $winX2, $winY2
+				END
+
+			END
+		END
+	END
+ENDMACRO
+MACRO _AbsDiff
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET $abs = 0
+	IF	$1 > $2
+		CALC	$abs = $1 - $2
+	ELSE
+		CALC	$abs = $2 - $1
+	END
+	CALC	$3 = $abs
+END
+ENDMACRO
+MACRO _FuzzyTest
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET $abs = 0
+	SET $fuzzy = .001
+	CALLMACRO _AbsDiff, $1, $2, $abs
+	IF	$abs < $fuzzy
+		CALC	$3 = 1
+	ELSE
+		CALC	$3 = 0
+	END
+ENDMACRO
+#edge to edge calcs removed 
+#MEASUREE2E $slayer, $seqno1, $seqno2 
+#SET $gap =  $$STATUS 
+#CALC $gap = $gap / 254000

@@ -1,0 +1,823 @@
+MACRO StentechCheckPlot
+	StrWrite $log, "StentechCheckPlot Macro Called %s",$$TIME
+	LogMessage 0, $log
+	Set $conflictFound = $$NO # set conflict found to no
+	# Setup Variables
+	Undo   $$NO                           # Set Undo inactive to reduce memory usage
+	Set    $numFid      = 0               # set initial number of fiducials to 0
+	Set    $dcode       = 10              # set initial Dcode to 10
+	Set    $offset      = 4.48818912      # Set to DEK as default
+	Set    $mmConv      = 0.03937008      # set conversion factor from mm to inches
+	Set    $engCrop     = -1              # set initial engineering crop to -1 as a default
+	Set    $comboRot    = $$NO            # set initial combo rotation to no
+	Set    $MirrorVert  = $$NO            # set initial Mirror vertical to no
+	Set    $rvwYesNo    = $$NO            # set initial data reviewed to no
+	Set    $isMin 		= $$NO            # set initial is minimum to no
+	StrSet $offside     , ""              # set initial offset side to empty string
+	StrSet $offsetChoice, ""              # set initial offset choice to empty string
+	StrSet $NumFidT     , ""              # set initial number of fiducials top to empty string
+	StrSet $FidApT      , ""              # set initial fid aperture top to empty string
+	StrSet $NumFidB     , ""              # set initial number of fiducials bottom to empty string
+	StrSet $FidApB      , ""              # set initial fid aperture bottom to empty string
+	StrSet $tmpStr      , ""              # set initial temporary string to empty string
+	StrSet $rvw         , ""              # set initial review to empty string
+	StrSet $cmtCornerMarks, ""            # set initial corner marks to empty string
+	StrSet $cmtRotateBottomImage, ""      # set initial rotate bottom image to empty string
+	StrSet $cmtAddTextInOpositeCorner, "" # set initial add text in oposite corner to empty string
+	StrSet $jsonFile	, "C:\\CADmatic\\NewJob.json" # set Json file to be written to
+	DeleteViewTabs 	# remove all tabs from the current design except Main and Log. This reduces memory usage.
+	# Setup Variables for CADmatic
+	If $gCADmatic
+		StrSet $checkplotCMT, "C:\\CADmatic\\checkplot.cmt" # set checkplot cmt read address to checkplot.cmt in CADmatic folder
+		StrSet $read, ""
+		FileOpen $fid, $checkplotCMT, "r"
+		If $$STATUS != 0
+			# parse values from checkplot.cmt
+			FileRead $fid,"", $cmtIsCombo                    # Can be any of the following [Yes,No, null]
+			FileRead $fid,"", $cmtOffsetType                 # Can be any of the following [DEK, CustomCombo, BoardToBoard, ComboEven, OriginToOuterEdge, Offset] Offset is only used for single image
+			FileRead $fid,"", $cmtOrientation                # Can be any of the following [AboveBelow, SideBySide]
+			FileRead $fid,"", $cmtComboOrientation           # Can be any of the following [BottomOnTop, TopOnTop, TopOnLeft, BottomOnLeft, null]
+			FileRead $fid,"", $cmtCornerMarks                # Can be any of the following [Inside, Outside, Skip]
+			FileRead $fid,"", $cmtSize                       # Can be any of the following [numVar in inches, null]
+			FileRead $fid,"", $cmtRotateBottomImage          # Can be any of the following [Yes, No, null]
+			FileRead $fid,"", $cmtOffsetValue                # Can be any of the following [numVar in mm]
+			FileRead $fid,"", $cmtSingleImageOffsetType      # Can be any of the following [Centered, Offset, null]
+			FileRead $fid,"", $cmtSide                       # Can be any of the following [Bottom, Top, Left, Right, null]
+			FileRead $fid,"", $cmtAddTextInOpositeCorner     # Can be any of the following [Yes, No, null]
+			FileRead $fid,"", $cmtAddStandardAlignmentPoints # Can be any of the following [Yes, No]
+			FileRead $fid,"", $cmtAddFlowLogo                # Can be any of the following [Yes, No]
+			FileClose $fid
+		Else
+			StrWrite $log, "Failed to read configuration file at\r\r%s\r\r(ID:001)", $config
+			LogMessage 0, $log
+			Stop $log
+		End
+		StrSet $rvw, $gOp # Set data reviewed to operation
+		PutDesignProperty "DataReviewed", $rvw # put data reviewed to design property
+		StrCmp $cmtIsCombo, "Yes" # compare is combo to yes
+		If $$STATUS == 0 # if status is 0 then the two strings are equal
+			Set $gComboYesNo = $$YES
+		Else
+			Set $gComboYesNo = $$NO
+		End
+	Else
+		StrSet $cmtAddFlowLogo, "" # placeholder CADmatic status will be checked in _AddLogos
+	End
+	# Do we have Top, Bot, None, or Both Layers?
+	SaveAs $$DSNNAME # save current design
+	# Get Paste Layers
+	CALLMACRO _SetgPasteLayersM
+	CALLMACRO _BorderCheck
+	CALLMACRO DeleteCPLayers
+	CALLMACRO SetLayerTypes
+	# Check for conflict
+	If $gCADmatic
+		SelectViewTab "Log" # select log tab in VisualCAM to reduce memory usage
+		# No check in CADmatic yet
+	Else
+		IsEmptyLayer $gModPasteT
+		If $$STATUS == $$FALSE
+			CALLMACRO RAD_CheckCutLayerForFids, $gModPasteT, $gFidT, $conflictFound
+		End
+		IsEmptyLayer $gModPasteB
+		If $$STATUS == $$FALSE
+			CALLMACRO RAD_CheckCutLayerForFids, $gModPasteB, $gFidB, $conflictFound
+		End
+		If $conflictFound == $$YES
+			MessageBox "Conflict on Fid/Cut layers", "Stop and fix issue - Yes\r\rAccept conflict and continue - No", 2, 1
+			If $$STATUS == $$YES
+				Stop "Conflict on Fid/Cut layers"
+			End
+		End
+	End
+	CompactApList $$YES
+	# Review Data
+	GetDesignproperty "DataReviewed", $rvw
+	StrLen $rvw
+	If $$STATUS == 0
+		MessageBox "Data Review", "Data Review is about to begin, please check your data carefully.", 0
+		If $gPasteLayers == 1
+			StrSet $side, "Top"
+		End
+		If $gPasteLayers == 2
+			StrSet $side, "Bot"
+		End
+		If $gPasteLayers == 3
+			StrSet $side, "Both"
+		End
+		CALLMACRO DataReview, $side
+		StrSet $rvw, $gOp
+		PutDesignProperty "DataReviewed", $rvw
+	Else
+		If $gCADmatic
+			Set $rvwYesNo = $$NO
+		Else
+			GetYesNo "Data has been reviewed, Review again?", $rvwYesNo
+		End
+		If $rvwYesNo == $$YES
+			If $gPasteLayers == 1
+				StrSet $side, "Top"
+			End
+			If $gPasteLayers == 2
+				StrSet $side, "Bot"
+			End
+			If $gPasteLayers == 3
+				StrSet $side, "Both"
+			End
+			CALLMACRO DataReview, $side
+		End
+	End
+	# Check for FOIL_ONLY
+	# FOIL_ONLY not availible for CADmatic
+	StrCmp $gFrame, "FOIL_ONLY"
+	If $$STATUS == 0
+		CALLMACRO AddFoil
+		Set $FoilOnly = $$YES
+	Else
+		Set $FoilOnly = $$NO
+		StrWrite $theFrame, "%s%s.vcam", $gFrames, $gFrame
+	End
+	# Check for MIN_ONLY
+	StrLoc $gFrame, "_min"
+	If $$STATUS > 0
+		Set $isMin = $$YES
+	Else
+		Set $isMin = $$NO
+	End
+	# CALLMACRO SetThickness
+	# Make Standard Text Blocks
+	If $gSavedDSN == 1
+		CALLMACRO _GetSavedFileInfo
+		CALLMACRO _CreateTextBlocks
+	Else
+		CALLMACRO _CreateTextBlocks
+	End
+	# Choose Location of data
+	# Top Only
+	If $gPasteLayers == 1
+		# Centered or Offset?
+		If $gCADmatic
+			StrSet $offsetChoice, $cmtSingleImageOffsetType
+		Else
+			GetListChoice "Centered or Offset?", $offsetChoice, "Centered", "Offset"
+		End
+		StrCmp $offsetChoice, "Offset"
+		If $$STATUS == 0
+			If $gCADmatic
+				StrSet $offside, $cmtSide
+			Else
+				GetListChoice "Offset from which side?", $offside, "Bottom(normal)", "Top", "Left", "Right"
+			End
+			If $gCADmatic
+				StrSet $offType, $cmtOffsetType
+			Else
+				GetListChoice "Choose Offset", $offType, "DEK", "Custom"
+			End
+			StrCmp $offType, "Custom"
+			If $$STATUS ==0
+				Calc  $offset = $offset * 25.4
+				Round $offset = $offset
+				If $gCADmatic
+					StrRead $cmtOffsetValue, "%n", $offset
+				Else
+					GetValue "Please enter offset value (mm):", $offset
+				End
+				Calc $offset = $offset * $mmConv
+			End
+		End
+		If $FoilOnly == $$YES
+			CopyLayer $gCheckPlotT, $gTxtOut20T
+		Else
+			CALLMACRO _ClearLayer, $gCheckPlotT, 1
+			MergeDesign $theFrame, 0, 0
+		End
+		CALLMACRO _CopyT, $offsetChoice, $offset, $offside, $engCrop, $cmtCornerMarks
+		CALLMACRO _AddTextBlock, $comboRot, $cmtAddTextInOpositeCorner
+		If $FoilOnly == $$NO
+			If $isMin == $$NO
+				CALLMACRO _AddLogos, $cmtAddFlowLogo
+			End
+		End
+	End
+	# Bottom Only
+	If $gPasteLayers == 2
+		If $gCADmatic
+			StrSet $offsetChoice, $cmtSingleImageOffsetType
+		Else
+			GetListChoice "Centered or Offset?", $offsetChoice, "Centered", "Offset"
+		End
+		StrCmp $offsetChoice, "Offset"
+		If $$STATUS == 0
+			If $gCADmatic
+				StrSet $offside, $cmtSide
+			Else
+				GetListChoice "Offset from which side?", $offside, "Bottom(normal)", "Top", "Left", "Right"
+			End
+			If $gCADmatic
+				StrSet $offType, $cmtOffsetType
+			Else
+				GetListChoice "Choose Offset", $offType, "DEK", "Custom"
+			End
+			StrCmp $offType, "Custom"
+			If $$STATUS ==0
+				Calc  $offset = $offset * 25.4
+				Round $offset = $offset
+				If $gCADmatic
+					StrRead $cmtOffsetValue, "%n", $offset
+				Else
+					GetValue "Please enter offset value (mm):", $offset
+				End
+				Calc $offset = $offset * $mmConv
+			End
+		End
+		If $FoilOnly == $$YES
+			CopyLayer $gCheckPlotT, $gTxtOut20B
+		Else
+			CALLMACRO _ClearLayer, $gCheckPlotT, 1
+			MergeDesign $theFrame, 0, 0
+			CALLMACRO _ClearLayer, $gCheckPlotB, 1
+		End
+		MoveLayer $gCheckPlotT, $gCheckPlotB
+		CALLMACRO _CopyB, $offsetChoice, $offset, $offside, $engCrop, $cmtCornerMarks
+		CALLMACRO _AddTextBlock, $comboRot, $cmtAddTextInOpositeCorner
+		If $FoilOnly == $$NO
+			If $isMin == $$NO
+				CALLMACRO _AddLogos, $cmtAddFlowLogo
+			End
+		End
+	End
+	# Both
+	If $gPasteLayers == 3
+		If $gCADmatic
+			# Combo is handled in CADmatic
+		Else
+			GetYesNo "Combo Top and Bottom into one frame?", $gComboYesNo
+		End
+		If $gComboYesNo == $$YES
+			Set $gThickB = $gThickT
+			If $FoilOnly == $$YES
+				CopyLayer $gCheckPlotT, $gTxtOut20T
+			Else
+				CALLMACRO _ClearLayer, $gCheckPlotT, 1
+				MergeDesign $theFrame, 0, 0
+			End
+			Set $formId = -1
+			Set $Static = -1
+			Set $Radio  = -1
+			Set $choice =  1
+			StrArray $comboAry(5)
+				StrSet $comboAry(1), "DEK Combo"
+				StrSet $comboAry(2), "Custom Combo"
+				StrSet $comboAry(3), "Board to Board Spacing"
+				StrSet $comboAry(4), "Combo even spacing"
+				StrSet $comboAry(5), "Origin to outer edge"
+				If $gCADmatic
+				StrCmp $cmtOffsetType, "DEK"
+				If $$STATUS == 0
+					Set $choice = 1
+				End
+				StrCmp $cmtOffsetType, "CustomCombo"
+				If $$STATUS == 0
+					Set $choice = 2
+				End
+				StrCmp $cmtOffsetType, "BoardToBoard"
+				If $$STATUS == 0
+					Set $choice = 3
+				End
+				StrCmp $cmtOffsetType, "ComboEven"
+				If $$STATUS == 0
+					Set $choice = 4
+				End
+				StrCmp $cmtOffsetType, "OriginToOuterEdge"
+				If $$STATUS == 0
+					Set $choice = 5
+				End
+			Else
+				DefineForm
+					FormId $formId
+					Title "Select Combo Offset Type:"
+					Margin               0.5
+					StaticText           $Static, 0.5, 0.5, 3.0, 0.5, "Choose combo then press enter", $$FALSE
+					RadioButtonControls  $Radio,  0.5, 1.0, 3.0, 2.5, 5, $comboAry, $choice, $$FALSE, $$FALSE
+				End
+				OpenForm $formId
+			End
+			StrSet $combo, $comboAry($choice)
+			StrCmp $combo, "Custom Combo"
+			If $$STATUS == 0
+				Calc $offset = $offset * 25.4
+				Round $offset = $offset
+				If $gCADmatic
+					StrRead $cmtOffsetValue, "%n", $offset
+				Else
+					GetValue "Please enter offset value (mm):", $offset
+				End
+				Calc $offset = $offset * $mmConv
+			End
+			StrCmp $combo, "Board to Board Spacing"
+			If $$STATUS == 0
+				Calc $offset = 2
+				If $gCADmatic
+					StrRead $cmtOffsetValue, "%n", $offset
+				Else
+					GetValue "Please enter Board to Board Spacing offset value (inches):", $offset
+				End
+			End
+			StrCmp $combo, "Origin to outer edge"
+			If $$STATUS == 0
+				Calc $offset = 10
+				If $gCADmatic
+					StrRead $cmtOffsetValue, "%n", $offset
+				Else
+					GetValue "Please enter origin to outer edge offset value (inches):", $offset
+				End
+				GetExtents $gBorderT, $lx,$ly, $ux,$uy, $$YES, $$NO
+				Calc $height = $uy - $ly
+				Calc $offset = $offset - $height
+				Calc $offset = $offset * 2
+				StrSet $combo, "Board to Board Spacing"
+			End
+			StrSet $offsetChoice, "Offset"
+			# Add Copy of Modified Paste to CP Layer(s)
+			Set $orientation = 0
+			If $gCADmatic
+				StrCmp $cmtOrientation, "AboveBelow"
+				If $$STATUS == 0
+					Set $orientation = 1
+				End
+				StrCmp $cmtOrientation, "SideBySide"
+				If $$STATUS == 0
+					Set $orientation = 2
+				End
+			End
+			Set $comboOrientation = 0
+			If $gCADmatic
+				StrCmp $cmtComboOrientation, "BottomOnTop"
+				If $$STATUS == 0
+					Set $comboOrientation = 1
+				End
+				StrCmp $cmtComboOrientation, "TopOnTop"
+				If $$STATUS == 0
+					Set $comboOrientation = 2
+				End
+				StrCmp $cmtComboOrientation, "TopOnLeft"
+				If $$STATUS == 0
+					Set $comboOrientation = 1
+				End
+				StrCmp $cmtComboOrientation, "BottomOnLeft"
+				If $$STATUS == 0
+					Set $comboOrientation = 2
+				End
+			End
+			CALLMACRO _Combo, 		 $offset, $combo, $engCrop, $comboRot, $MirrorVert, $orientation, $cmtCornerMarks, $cmtRotateBottomImage, $comboOrientation
+			CALLMACRO _AddTextBlock, $comboRot, $cmtAddTextInOpositeCorner
+			If $FoilOnly == $$NO
+				If $isMin == $$NO
+					CALLMACRO _AddLogos, $cmtAddFlowLogo
+				End
+			End
+		Else
+			StrCmp $gPartNumB, ""
+			If $$STATUS == 0
+				StrSet $gPartNumB, $gPartNumT
+				GetString "Enter Customer Part number for Bottom Side:", $gPartNumB
+			End
+
+			If $gCADmatic
+				StrSet $offsetChoice, $cmtSingleImageOffsetType
+			Else
+				GetListChoice "Centered or Offset?", $offsetChoice, "Centered", "Offset"
+			End
+			StrCmp $offsetChoice, "Offset"
+			If $$STATUS == 0
+				If $gCADmatic
+					StrSet $offside, $cmtSide
+				Else
+					GetListChoice "Offset from which side?", $offside, "Bottom(normal)", "Top", "Left", "Right"
+				End
+				If $gCADmatic
+					StrSet $offType, $cmtOffsetType
+				Else
+					GetListChoice "Choose Offset", $offType, "DEK", "Custom"
+				End
+				StrCmp $offType, "Custom"
+				If $$STATUS ==0
+					Calc 	 $offset = $offset * 25.4
+					Round 	 $offset = $offset
+					If $gCADmatic
+						StrRead $cmtOffsetValue, "%n", $offset
+					Else
+						GetValue "Please enter offset value (mm):", $offset
+					End
+					Calc 	 $offset = $offset * $mmConv
+				End
+			End
+			If $FoilOnly == $$YES
+				CopyLayer 	$gCheckPlotT, $gCheckPlotB
+				CopyLayer 	$gCheckPlotT, $gTxtOut20T
+				CopyLayer 	$gCheckPlotT, $gTxtOut20B
+			Else
+				CALLMACRO _ClearLayer, $gCheckPlotT, 1
+				CALLMACRO _ClearLayer, $gCheckPlotB, 1
+				MergeDesign $theFrame, 0, 0
+				CopyLayer 	$gCheckPlotT, $gCheckPlotB
+			End
+			CALLMACRO _CopyT, $offsetChoice, $offset, $offside, $engCrop, $cmtCornerMarks
+			CALLMACRO _CopyB, $offsetChoice, $offset, $offside, $engCrop, $cmtCornerMarks
+			If	$gSavedDSN == 1
+				CALLMACRO _CreateTextBlocks
+			End
+			CALLMACRO _AddTextBlock, $comboRot, $cmtAddTextInOpositeCorner
+			If $FoilOnly == $$NO
+				If $isMin == $$NO
+					CALLMACRO _AddLogos, $cmtAddFlowLogo
+				End
+			End
+		End
+	End
+	If $gCADmatic
+		# not needed for CADmatic users
+	Else
+		ViewAll
+	End
+	Set $addAlignmentPoints = $$NO
+	If $gCADmatic
+		StrCmp $cmtAddStandardAlignmentPoints, "Yes"
+		If $$STATUS == 0
+			Set $addAlignmentPoints = $$YES
+		End
+	Else
+		CALLMACRO _AlignmentOptions, $addAlignmentPoints
+	End
+	If $addAlignmentPoints == $$YES
+		If $gComboYesNo == $$YES
+			CALLMACRO AddAlignmentPoints, $gAlignT, $$NO # $1 = Layer, $2 = Mirrored
+			Layern $gAlignT
+				LyrName     "Alignment Layer Top.12"
+				Visibility  1
+			End
+		Else
+			IsEmptyLayer $gCutT
+			If $$STATUS == $$FALSE
+				CALLMACRO AddAlignmentPoints, $gAlignT, $$NO # $1 = Layer, $2 = Mirrored
+				Layern $gAlignT
+					LyrName     "Alignment Layer Top.12"
+					Visibility  1
+				End
+			End
+			IsEmptyLayer $gCutB
+			If $$STATUS == $$FALSE
+				CALLMACRO AddAlignmentPoints, $gAlignB, $$NO # $1 = Layer, $2 = Mirrored
+				Layern $gAlignB
+					LyrName     "Alignment Layer Bottom.12"
+					Visibility  1
+				End
+			End
+		End
+	End
+	CALLMACRO _MakeSizePlot
+	CALLMACRO _MakeLMD
+	Calc $thickInT = $gThickT /1000
+	Calc $thickINB = $gThickB /1000
+	# Get list of shape sets
+	GetStencilShapeSetnames
+	Set $count = $$STATUS
+	If $count > 0
+		StrArray $shapeSetNameArray($count)
+		GetStencilShapeSetnames $shapeSetNameArray
+	End
+	# Checkplot Names
+	CALLMACRO _CheckPlotLayerNames
+	StrCmp $offsetChoice, "Offset"
+	If $$STATUS == 0
+		If $gPasteLayers == 3
+			if $gComboYesNo == $$YES
+				StrCmp $combo, "Board to Board Spacing"
+				if $$STATUS == 0
+					StrWrite $offsetStr, "%.2n in", $offset
+				Else
+					Calc $offset = $offset * 25.4
+					StrWrite $offsetStr, "%.1n mm", $offset
+				End
+			Else
+				Calc $offset = $offset * 25.4
+				StrWrite $offsetStr, "%.1n mm", $offset
+			End
+		Else
+			Calc $offset = $offset * 25.4
+			StrWrite $offsetStr, "%.1n mm", $offset
+		End
+	Else
+		StrWrite $offsetStr, "Centered"
+	End
+	CALLMACRO _FidInfo, $gPasteLayers, $gComboYesNo, $NumFidT, $FidApT, $NumFidB, $FidApB
+	# Replace checkplot text strings
+	StrWrite $thickT,  "%.1n mils", $gThickT
+	StrWrite $thickB,  "%.1n mils", $gThickB
+	StrSet   $dateISO, "Date Error"
+	CALLMACRO _GetISODate, $dateISO
+	# Store CheckPlot info
+	GetDesignProperty "Material:",  $matChoice
+	GetDesignProperty "MaterialB:", $matChoiceB
+	ReplaceText 0,    "@1",  $gCustomer  # Customer Name
+	ReplaceText 0,    "@2",  $gPartNumT  # Part Number
+	ReplaceText 0,    "@3",  $dateISO    # Date
+	ReplaceText 0,    "@4",  $gFrame     # Frame
+	ReplaceText 0,    "@5",  $offsetStr  # Offset
+	ReplaceText 0,    "@9",  $gLeadFree  # LeadFree
+	ReplaceText 0,    "@19", $gCustomer  # Library Used
+	ReplaceText 0,    "@21", $gOp        # Engineer
+	# Create JobData folder if it doesn't exist
+	SplitPath $$DSNNAME, $dir, $filename, $ext # get Directory Name
+	GetAppDataFolder $appDataPath # get application data Folder
+	StrWrite $bat, 	"%s\\macros\\ReferenceFiles\\writeToFile.bat", $appDataPath # set batch file to be run. This is used instead of FileOpen/FileWrite/FileClose
+	StrWrite $jsonBat, 	"%s\\macros\\ReferenceFiles\\updateJson.bat", $appDataPath
+	# update Cad Emp List in rbData.json
+	If $gCADmatic
+		StrWrite $cmd,	"%s %s %s %.0n", $jsonBat, $jsonFile,  ".rbData.preCADEngineerID", 210 # set command to be run
+		SysCmd 	 $cmd # run command
+		StrWrite $cmd,	"%s %s %s %.0n", $jsonBat, $jsonFile,  ".rbData.cadEmpList", 210 # set command to be run
+		SysCmd 	 $cmd # run command
+		StrWrite $cmd,	"%s %s %s %.0n", $jsonBat, $jsonFile,  ".rbData.cadQCEmpList", 210 # set command to be run
+		SysCmd 	 $cmd # run command
+	End
+	If $gPasteLayers == 1
+		GetPasteLayerInfo $gModPasteT, $thickInT, $volume, $minimumAreaRatio, $quantity # get paste Layer info
+		StrWrite $vol,   "%n Cu In", $volume # write volume to string
+		StrWrite $minAR, "%.3n",     $minimumAreaRatio # write minimum area ratio to string
+		StrWrite $qty,   "%.0n",     $quantity # write quantity to string
+		GetMinFlashLayerInfo $gModPasteT, $mDim, $mPitch, $mDim2 # get minimum flash Layer info
+		Calc $mDim   = $mDim   * 1000 # Convert to mils
+		Calc $mDim2  = $mDim2  * 1000 # Convert to mils
+		Calc $mPitch = $mPitch * 1000 # Convert to mils
+		StrWrite 	$gMinDim,     "%.1nx%.1n mils", $mDim, $mDim2 # write minimum dimension to string
+		StrWrite 	$gMinPitch,   "%.1n mils", $mPitch # write minimum pitch to string
+		ReplaceText $gCheckPlotT, "@6",  $gProcessT  # Process
+		ReplaceText $gCheckPlotT, "@7",  $matChoice  # Material
+		ReplaceText $gCheckPlotT, "@8",  $thickT     # Thickness
+		ReplaceText $gCheckPlotT, "@10", $gCoatT     # Coating
+		ReplaceText $gCheckPlotT, "@12", $NumFidT    # Number Fiducials
+		ReplaceText $gCheckPlotT, "@13", $FidApT     # Fid Aperture
+		ReplaceText $gCheckPlotT, "@14", $qty        # Num Apertures
+		ReplaceText $gCheckPlotT, "@15", $gMinDim    # Min Dimension
+		ReplaceText $gCheckPlotT, "@16", $gMinPitch  # Min Pitch
+		ReplaceText $gCheckPlotT, "@17", $vol        # Paste Vol
+		ReplaceText $gCheckPlotT, "@18", $minAR      # Min Area Ratio
+		ReplaceText $gCheckPlotT, "@20", $gShapeSet  # ShapeSet Used
+		ReplaceText $gCheckPlotT, "@22", $gJobNumT   # Job
+		# Log Aperture and fid count
+		StrWrite $file, "%s\\JobData\\Ap_Count_top.txt", $dir # set file name to be written to
+		StrWrite $cmd,	"%s %s %s", $bat, $file, $qty # set command to be run
+		SysCmd 	 $cmd # run command
+		StrWrite $file, "%s\\JobData\\Fid_Count_top.txt", $dir # set file name to be written to
+		StrWrite $cmd,	"%s %s %s", $bat, $file, $NumFidT # set command to be run
+		SysCmd 	 $cmd # run command
+		# Update JSON file
+		If $gCADmatic
+			StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.aperturesCountTop", $qty # set command to be run
+			SysCmd 	 $cmd # run command
+			StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.totalQtyOfFidsTop", $NumFidT # set command to be run
+			SysCmd 	 $cmd # run command
+		End
+		# Check Coating
+		GetDesignProperty "Coating:", $coating # get coating from design property
+		StrCmp $coating, "NanoSlic" # compare coating to NanoSlic
+		If $$STATUS == 0 # A value of 0 indicates that the two strings are equal.
+			ReplaceText $gCheckPlotT, "@11", "Yes" # Coating
+		Else
+			ReplaceText $gCheckPlotT, "@11", "No"  # Coating
+		End
+	End
+	If $gPasteLayers == 2
+		GetPasteLayerInfo    $gModPasteB, $thickInT, $volume, $minimumAreaRatio, $quantity # get paste Layer info
+		StrWrite             $vol,       "%n Cu In", $volume # write volume to string
+		StrWrite             $minAR,     "%.3n", $minimumAreaRatio # write minimum area ratio to string
+		StrWrite             $qty,       "%.0n", $quantity # write quantity to string
+		GetMinFlashLayerInfo $gModPasteB, $mDim, $mPitch, $mDim2 # get minimum flash Layer info
+		Calc                 $mDim   =   $mDim   * 1000 # Convert to mils
+		Calc                 $mDim2  =   $mDim2  * 1000 # Convert to mils
+		Calc                 $mPitch =   $mPitch * 1000 # Convert to mils
+		StrWrite             $gMinDim,   "%.1nx%.1n mils", $mDim, $mDim2
+		StrWrite             $gMinPitch, "%.1n mils", $mPitch
+		ReplaceText 		 $gCheckPlotB, "@6",  $gProcessB  # Process
+		ReplaceText 		 $gCheckPlotB, "@7",  $matChoiceB # Material
+		ReplaceText 		 $gCheckPlotB, "@8",  $thickB     # Thickness
+		ReplaceText 		 $gCheckPlotB, "@10", $gCoatB     # Coating
+		ReplaceText          $gCheckPlotB, "@12", $NumFidB    # Number Fiducials
+		ReplaceText          $gCheckPlotB, "@13", $FidApB     # Fid Aperture
+		ReplaceText          $gCheckPlotB, "@17", $vol        # Paste Vol
+		ReplaceText          $gCheckPlotB, "@14", $qty        # Num Apertures
+		ReplaceText          $gCheckPlotB, "@18", $minAR      # Min Area Ratio
+		ReplaceText          $gCheckPlotB, "@15", $gMinDim    # Min Dimension
+		ReplaceText          $gCheckPlotB, "@16", $gMinPitch  # Min Pitch
+		ReplaceText 		 $gCheckPlotB, "@20", $gShapeSetB # ShapeSet Used
+		ReplaceText 		 $gCheckPlotB, "@22", $gJobNumB   # Job
+		# Log Aperture and fid count
+		StrWrite $file, "%s\\JobData\\Ap_Count_bot.txt", $dir # set file name to be written to
+		StrWrite $cmd,	"%s %s %s", $bat, $file, $qty # set command to be run
+		SysCmd $cmd # run command
+		StrWrite $file, "%s\\JobData\\Fid_Count_bot.txt", $dir # set file name to be written to
+		StrWrite $cmd,	"%s %s %s", $bat, $file, $NumFidB # set command to be run
+		SysCmd $cmd # run command
+		# update JSON file
+		If $gCADmatic
+			StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.aperturesCountBot", $qty # set command to be run
+			SysCmd 	 $cmd # run command
+			StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.totalQtyOfFidsBot", $NumFidB # set command to be run
+			SysCmd 	 $cmd # run command
+		End
+		# Check Coating
+		GetDesignProperty "CoatingB:", $coatingB # get coating from design property
+		StrCmp $coatingB, "NanoSlic" # compare coating to NanoSlic
+		If $$STATUS == 0 # A value of 0 indicates that the two strings are equal.
+			ReplaceText $gCheckPlotB, "@11", "Yes" # Coating
+		Else
+			ReplaceText $gCheckPlotB, "@11", "No"  # Coating
+		End
+	End
+	If $gPasteLayers == 3
+		If $gComboYesNo
+			GetPasteLayerInfo 0, $thickInT, $volume, $minimumAreaRatio, $quantity # get paste Layer info
+			StrWrite 	$vol,    "%n Cu In", $volume # write volume to string
+			StrWrite 	$minAR,  "%.3n", $minimumAreaRatio # write minimum area ratio to string
+			StrWrite 	$qty,    "%.0n", $quantity # write quantity to string
+			GetMinFlashLayerInfo $gModPasteT, $mDim, $mPitch, $mDim2 # get minimum flash Layer info
+			Calc 		$mDim    = $mDim   * 1000 # Convert to mils
+			Calc 		$mDim2   = $mDim2  * 1000 # Convert to mils
+			Calc 		$mPitch  = $mPitch * 1000 # Convert to mils
+			StrWrite 	$gMinDim,   "%.1nx%.1n mils", $mDim, $mDim2 # write minimum dimension to string
+			StrWrite 	$gMinPitch, "%.1n mils",  $mPitch # write minimum pitch to string
+			ReplaceText $gCheckPlotT, "@6",  $gProcessT # Process
+			ReplaceText $gCheckPlotT, "@7",  $matChoice # Material
+			ReplaceText $gCheckPlotT, "@8",  $thickT    # Thickness
+			ReplaceText $gCheckPlotT, "@10", $gCoatT    # Coating
+			ReplaceText $gCheckPlotT, "@12", $NumFidT   # Number Fiducials
+			ReplaceText $gCheckPlotT, "@13", $FidApT    # Fid Aperture
+			ReplaceText $gCheckPlotT, "@14", $qty       # Num Apertures
+			ReplaceText $gCheckPlotT, "@15", $gMinDim   # Min Dimension
+			ReplaceText $gCheckPlotT, "@16", $gMinPitch # Min Pitch
+			ReplaceText $gCheckPlotT, "@17", $vol       # Paste Vol
+			ReplaceText $gCheckPlotT, "@18", $minAR     # Min Area Ratio
+			ReplaceText $gCheckPlotT, "@20", $gShapeSet # ShapeSet Used
+			ReplaceText $gCheckPlotT, "@22", $gJobNumT  # Job
+			# Log Aperture and fid count
+			StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.aperturesCountTop", $qty # set command to be run
+			StrWrite $file, "%s\\JobData\\Ap_Count_top.txt", $dir # set file name to be written to
+			StrWrite $cmd,	"%s %s %s", $bat, $file, $qty # set command to be run
+			SysCmd	 $cmd # run command
+			StrWrite $file, "%s\\JobData\\Fid_Count_top.txt", $dir # set file name to be written to
+			StrWrite $cmd,	"%s %s %s", $bat, $file, $NumFidT # set command to be run
+			SysCmd	 $cmd # run command
+			# update JSON file
+			If $gCADmatic
+				StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.aperturesCountTop", $qty # set command to be run
+				SysCmd	 $cmd # run command
+				StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.totalQtyOfFidsTop", $NumFidT # set command to be run
+				SysCmd	 $cmd # run command
+			End
+			# Check coating
+			GetDesignProperty "Coating:", $coating # get coating from design property
+			StrCmp $coating, "NanoSlic" # compare coating to NanoSlic
+			If $$STATUS == 0 # A value of 0 indicates that the two strings are equal.
+				ReplaceText $gCheckPlotT, "@11", "Yes" # Coating
+			Else
+				ReplaceText $gCheckPlotT, "@11", "No"  # Coating
+			End
+		Else
+			# Top
+			GetPasteLayerInfo $gModPasteT, $thickInT, $volume, $minimumAreaRatio, $quantity # get paste Layer info
+			StrWrite 	$vol,       "%n Cu In", $volume # write volume to string
+			StrWrite 	$minAR,     "%.3n", $minimumAreaRatio # write minimum area ratio to string
+			StrWrite 	$qty,       "%.0n", $quantity # write quantity to string
+			GetMinFlashLayerInfo 	$gModPasteT, $mDim, $mPitch, $mDim2 # get minimum flash Layer info
+			Calc 		$mDim   = 	$mDim   * 1000 # Convert to mils
+			Calc 		$mDim2  = 	$mDim2  * 1000 # Convert to mils
+			Calc 		$mPitch = 	$mPitch * 1000 # Convert to mils
+			StrWrite 	$gMinDim,   "%.1nx%.1n mils", $mDim, $mDim2 # write minimum dimension to string
+			StrWrite 	$gMinPitch, "%.1n mils",  $mPitch # write minimum pitch to string
+			ReplaceText $gCheckPlotT, "@6",  $gProcessT # Process
+			ReplaceText $gCheckPlotT, "@7",  $matChoice # Material
+			ReplaceText $gCheckPlotT, "@8",  $thickT    # Thickness
+			ReplaceText $gCheckPlotT, "@10", $gCoatT    # Coating
+			ReplaceText $gCheckPlotT, "@12", $NumFidT   # Number Fiducials
+			ReplaceText $gCheckPlotT, "@13", $FidApT    # Fid Aperture
+			ReplaceText $gCheckPlotT, "@17", $vol       # Paste Vol
+			ReplaceText $gCheckPlotT, "@14", $qty       # Num Apertures
+			ReplaceText $gCheckPlotT, "@18", $minAR     # Min Area Ratio
+			ReplaceText $gCheckPlotT, "@15", $gMinDim   # Min Dimension
+			ReplaceText $gCheckPlotT, "@16", $gMinPitch # Min Pitch
+			ReplaceText $gCheckPlotT, "@20", $gShapeSet # ShapeSet Used
+			ReplaceText $gCheckPlotT, "@22", $gJobNumT  # Job
+			# Log Aperture and fid count
+			StrWrite $file, "%s\\JobData\\Ap_Count_top.txt", $dir # set file name to be written to
+			StrWrite $cmd,	"%s %s %s", $bat, $file, $qty # set command to be run
+			SysCmd	 $cmd # run command
+			StrWrite $file, "%s\\JobData\\Fid_Count_top.txt", $dir # set file name to be written to
+			StrWrite $cmd,	"%s %s %s", $bat, $file, $NumFidT # set command to be run
+			SysCmd	 $cmd # run command
+			# update JSON file
+			If $gCADmatic
+				StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.aperturesCountTop", $qty # set command to be run
+				SysCmd	 $cmd # run command
+				StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.totalQtyOfFidsTop", $NumFidT # set command to be run
+				SysCmd	 $cmd # run command
+			End
+			# Check coating
+			GetDesignProperty "Coating:", $coating # get coating from design property
+			StrCmp $coating, "NanoSlic" # compare coating to NanoSlic
+			If $$STATUS == 0 # A value of 0 indicates that the two strings are equal.
+				ReplaceText $gCheckPlotT, "@11", "Yes" # Coating
+			Else
+				ReplaceText $gCheckPlotT, "@11", "No"  # Coating
+			End
+			# Bottom
+			GetPasteLayerInfo $gModPasteB, $thickINB, $volume, $minimumAreaRatio, $quantity # get paste Layer info
+			StrWrite 	$vol,    "%n Cu In", $volume # write volume to string
+			StrWrite 	$minAR,  "%.3n", $minimumAreaRatio # write minimum area ratio to string
+			StrWrite 	$qty,    "%.0n", $quantity # write quantity to string
+			GetMinFlashLayerInfo $gModPasteB, $mDim, $mPitch, $mDim2 # get minimum flash Layer info
+			Calc 		$mDim   = $mDim   * 1000 # Convert to mils
+			Calc 		$mDim2  = $mDim2  * 1000 # Convert to mils
+			Calc 		$mPitch = $mPitch * 1000 # Convert to mils
+			StrWrite 	$gMinDim,    "%.1nx%.1n mils", $mDim, $mDim2 # write minimum dimension to string
+			StrWrite 	$gMinPitch,  "%.1n mils",  $mPitch # write minimum pitch to string
+			ReplaceText $gCheckPlotB, $gPartNumT, $gPartNumB # Part Number
+			ReplaceText $gCheckPlotB, "@6",  $gProcessB  # Process
+			ReplaceText $gCheckPlotB, "@7",  $matChoiceB # Material
+			ReplaceText $gCheckPlotB, "@8",  $thickB     # Thickness
+			ReplaceText $gCheckPlotB, "@10", $gCoatB     # Coating
+			ReplaceText $gCheckPlotB, "@12", $NumFidB    # Number Fiducials
+			ReplaceText $gCheckPlotB, "@13", $FidApB     # Fid Aperture
+			ReplaceText $gCheckPlotB, "@14", $qty        # Num Apertures
+			ReplaceText $gCheckPlotB, "@15", $gMinDim    # Min Dimension
+			ReplaceText $gCheckPlotB, "@16", $gMinPitch  # Min Pitch
+			ReplaceText $gCheckPlotB, "@17", $vol        # Paste Vol
+			ReplaceText $gCheckPlotB, "@18", $minAR      # Min Area Ratio
+			ReplaceText $gCheckPlotB, "@20", $gShapeSetB # ShapeSet Used
+			ReplaceText $gCheckPlotB, "@22", $gJobNumB   # Job
+			# Log Aperture and fid count
+			StrWrite $file, "%s\\JobData\\Ap_Count_bot.txt", $dir # set file name to be written to
+			StrWrite $cmd,	"%s %s %s", $bat, $file, $qty # set command to be run
+			SysCmd	 $cmd # run command
+			StrWrite $file, "%s\\JobData\\Fid_Count_bot.txt", $dir # set file name to be written to
+			StrWrite $cmd,	"%s %s %s", $bat, $file, $NumFidB # set command to be run
+			SysCmd	 $cmd # run command
+			# update JSON file
+			If $gCADmatic
+				StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.aperturesCountBot", $qty # set command to be run
+				SysCmd	 $cmd # run command
+				StrWrite $cmd,	"%s %s %s %s", $jsonBat, $jsonFile, ".rbData.totalQtyOfFidsBot", $NumFidB # set command to be run
+				SysCmd	 $cmd # run command
+			End
+			# Check coating
+			GetDesignProperty "Coating:", $coating # get coating from design property
+			StrCmp $coating, "NanoSlic" # compare coating to NanoSlic
+			If $$STATUS == 0 # A value of 0 indicates that the two strings are equal.
+				ReplaceText $gCheckPlotT, "@11", "Yes" # Coating
+			Else
+				ReplaceText $gCheckPlotT, "@11", "No"  # Coating
+			End
+			GetDesignProperty "CoatingB:", $coatingB
+			StrCmp $coatingB, "NanoSlic"
+			If $$STATUS == 0 # A value of 0 indicates that the two strings are equal.
+				ReplaceText $gCheckPlotB, "@11", "Yes" # Coating
+			Else
+				ReplaceText $gCheckPlotB, "@11", "No"  # Coating
+			End
+		End
+	End
+	StrCmp $gCoatT, "NanoSlic"
+	If $$STATUS == 0
+		CALLMACRO GenerateNSG, $gJobNumT, $gNSGLayerT
+	End
+	StrCmp $gCoatB, "NanoSlic"
+	If $$STATUS == 0
+		CALLMACRO GenerateNSG, $gJobNumB, $gNSGLayerB
+	End
+	IsEmptyLayer $gEngraveT
+	If $$STATUS == $$FALSE
+		CALLMACRO _RAD_GiveAnF, $gEngraveT, $$NO, $gCheckPlotT
+	End
+	IsEmptyLayer $gEngraveB
+	If $$STATUS == $$FALSE
+		CALLMACRO _RAD_GiveAnF, $gEngraveB, $$NO, $gCheckPlotB
+	End
+	Set $exportFiles = $$NO
+	If $gCADmatic
+		Set $exportFiles = $$YES
+	Else
+		MessageBox "CheckPlot Finished", "Press OK to Export Files\r\rPress Cancel to make additional manual changes.\r\rPress (F4) or run StentechExportFiles to export files once manual changes are finished.", 1
+		If $$STATUS == $$YES
+			Set $exportFiles = $$YES
+		End
+	End
+	If $exportFiles
+		CALLMACRO StentechExportFiles
+	End
+	CALLMACRO ResetSelect
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+ENDMACRO

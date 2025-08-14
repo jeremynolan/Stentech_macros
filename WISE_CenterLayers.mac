@@ -1,0 +1,77 @@
+# This macro moves a layer or a set of visible layers so that it's center is at the 0,0 origin.
+#Current version written by Stan Keightley Jr., Copyright 1998-2016 WISE Software Solutions, Inc.
+MACRO WISE_CenterLayers
+
+	SET $layer = 0
+	SET $brdr = 0
+	CALLMACRO _GetBoardProfileLyr, $brdr
+	GETVALUE "Enter layer to center: (0 for all visible layers)", $layer
+	IF $brdr > 0
+		GETYESNO "Use Border Layer to Center?", $yesno
+	ELSE
+		SET $yesno = $$NO
+	END
+
+	REPEAT $layer > -1
+		SET $ctrX = 0.0
+		SET $ctrY = 0.0
+		IF $yesno == $$YES
+			CALLMACRO "_GetCenter", $brdr, $ctrX, $ctrY
+		ELSE
+			CALLMACRO "_GetCenter", $layer, $ctrX, $ctrY
+		END
+		GETEXTENTS $layer, $lx, $ly, $ux, $uy
+		SELECTFILTER
+			ADDTYPES 0
+		END
+
+		MOVE
+			BY 1 # window
+			FLASHES $$YES
+			DRAWS $$YES
+			ARCS $$YES
+			LAYER $layer
+			GO $lx, $ly, $ux, $uy, $ctrX, $ctrY, 0, 0
+		END
+		VIEWALL
+		IF $layer > 0
+			GETYESNO "Center more layers?", $value
+			IF $value == $$NO
+				VIEWALL
+				STOP "Center Macro Complete"
+			END
+		ELSE
+			VIEWALL
+			STOP "Center Macro Complete"
+		END
+		GETVALUE "Enter layer to center: (0 for all visible layers)", $layer
+	END
+	GETEXTENTS 0, $LX, $LY, $UX, $UY, $$NO, $$NO
+	VIEWALL
+END
+MACRO _GetCenter
+	GETEXTENTS $1, $lx, $ly, $ux, $uy
+	CALC $tmp = $ux - $lx
+	CALC $tmp = $tmp / 2.0
+	CALC $2 = $lx + $tmp
+
+	CALC $tmp = $uy - $ly
+	CALC $tmp = $tmp / 2.0
+	CALC $3 = $ly + $tmp
+END
+MACRO _GetBoardProfileLyr
+	# CALLMacro BreakPoint, $1
+	Set $1 = 0
+	Set $Repeat = $$YES
+	Repeat $Repeat != $$NO
+		CALC $1 = $1 + 1
+		IF $1 == $$MAXLAYERS
+			Set $Repeat = $$NO
+			Set $1 = 0
+		END
+		GETLAYER $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		IF $type == $$LTBORDER
+			Set $Repeat = $$NO
+		END
+	END
+ENDMACRO

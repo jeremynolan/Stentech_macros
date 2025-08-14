@@ -1,0 +1,28 @@
+MACRO GetDataLength
+
+GetValue "Enter layer number (-1 for all layers)",  $LyrNum 
+
+If $LyrNum == -1
+	StrSet $MsgStr, "Total data length for all layers:"
+Else
+	StrWrite $MsgStr, "%s %n %s", "Total data length for layer", $LyrNum, " is:"
+End
+
+GetFirstItem $LyrNum, $SeqNum, $NetID, $DCode, $Type, $X1, $Y1, $X2, $Y2, $Diameter, $CW, $Flags
+
+Set $TotalLen = 0
+Repeat $$STATUS != $$FALSE
+
+	GetItemLength $LyrNum, $SeqNum, $ItemLen
+
+	If $$STATUS != $$FALSE
+		Set $TotalLen = $TotalLen + $ItemLen
+	End
+
+	GetNextItem $LyrNum, $SeqNum, $NetID, $DCode, $Type, $X1, $Y1, $X2, $Y2, $Diameter, $CW, $Flags
+End
+
+StrWrite $Msg, "%s %n %s", $MsgStr, $TotalLen, "inches."
+MessageBox "Data Length", $Msg, 0, 1
+
+ENDMACRO

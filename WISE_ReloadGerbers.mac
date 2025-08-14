@@ -1,0 +1,57 @@
+MACRO ReloadGerberFiles
+	# This macro is written to help automatically reload gerber files 
+	# for users who need to reload files of the same name and location
+	# after an updated set of gerbers has been exported from the CAD system.
+	# Written by Stan Keightley Jr. in August of 2016
+	# Copyright 2016 WISE Software Solutions, Inc.
+
+	STRARRAY $filenames($$MAXLAYERS)
+	ARRAY $reloaded($$MAXLAYERS)
+	FILEGETNAME "Please select RS274-X gerber files to reload:", "", "", "", "Gerber Files|gbr gbx pho art grb", 2, $filenames, $folder
+	IF $$STATUS == 0
+		STOP "User Aborted."
+	END
+	SET $layer = 1
+	REPEAT $layer < $$MAXLAYERS
+		GETLAYER $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		IF $$STATUS == $$TRUE
+			IF $type != $$LTNC
+				SPLITPATH $fn, $dir, $file, $ext
+				STRSET $fn, $file
+				STRCAT $fn, "."
+				STRCAT $fn, $ext
+				SET $index = 1
+				REPEAT $index <= $$MAXLAYERS
+					STRCMP $fn, $filenames($index)
+					IF $$STATUS == 0
+						DELETELAYER $layer
+						STRSET $thefile, $folder
+						STRCAT $thefile, "\\"
+						STRCAT $thefile, $filenames($index)
+						IMPORTGERBER $thefile, $layer
+						LAYERN $layer
+							LYRNAME $ln
+							FLASHCOLOR $fc
+							DRAWCOLOR $dc
+							TYPE $type
+						END
+						SET $reloaded($index) = $$YES
+						SET $index = $$MAXLAYERS
+					END
+					CALC $index = $index + 1
+				END
+			END
+		END
+		CALC $layer = $layer + 1
+	END
+	STRSET $message, "The following gerbers you selected were found in this design and reloaded: "
+	SET $index = 1
+	REPEAT $index <= $$MAXLAYERS
+		IF $reloaded($index) == $$YES
+			STRCAT $message, $filenames($index)
+STRCAT $message, "\r\n"
+		END
+		CALC $index = $index + 1
+	END
+	MESSAGEBOX "Macro complete", $message, 0
+ENDMACRO

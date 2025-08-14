@@ -1,0 +1,70 @@
+MACRO ConvertMixedPolarityLayers
+	Set $tLayer = 0
+	Set $layer  = 1
+	GetLayer $layer, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	Repeat $layer < $$MAXLAYERS
+		If $polarity == 2
+			GetFreeLayer $tLayer
+			CopyLayer $layer, $tLayer
+			Erase
+				By $$WINDOWMODE
+				Boundary  $$YES
+				Flashes   $$YES
+				Draws     $$YES
+				Arcs      $$YES
+				Drills    $$YES
+				Slots     $$YES
+				Layer     $layer
+				Dcode     0	# Erase all D-codes
+				Tool      0	# Erase all tools
+				Polarity  0
+				Go $lx,$ly,$ux,$uy
+			End
+			Composite2Layer
+				CompositeLayer 	$tLayer
+				ToLayer 		$layer
+				Method 			1 # Analyze
+				Go
+			End
+			DeleteLayer $tLayer
+		End
+		Calc $layer = $layer + 1
+		GetLayer $layer, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	End
+ENDMACRO
+
+MACRO ConvertMixedPolarityLayer
+	Set $tLayer = 0
+	Set $layer = 1
+	If $$CALLDEPTH == 1
+		Set $layer = $1
+	Else
+		GetValue "Enter Layer to Process:", $layer
+	End
+	GetLayer $layer, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	If $polarity == 2
+		GetFreeLayer $tLayer
+		CopyLayer $layer, $tLayer
+		Erase
+			By $$WINDOWMODE
+			Boundary  $$YES
+			Flashes   $$YES
+			Draws     $$YES
+			Arcs      $$YES
+			Drills    $$YES
+			Slots     $$YES
+			Layer     $layer
+			Dcode     0	# Erase all D-codes
+			Tool      0	# Erase all tools
+			Polarity  0
+			Go $lx,$ly,$ux,$uy
+		End
+		Composite2Layer
+			CompositeLayer 	$tLayer
+			ToLayer 		$layer
+			Method 			1 #Analyze
+			Go
+		End
+		DeleteLayer $tLayer
+	End
+ENDMACRO

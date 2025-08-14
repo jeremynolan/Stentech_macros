@@ -1,0 +1,189 @@
+MACRO DataReview
+	StrWrite $log, "DataReview Macro Called %s, Side = %s", $$TIME, $1
+    LogMessage 0, $log
+	# $1 "Top", "Bot", "Both"
+	DeleteViewTabs
+	If $gCADmatic
+		SelectViewTab "Log"
+	Else
+		SelectViewTab "Main"
+	End
+	Set $layer = 1
+	Set $both  = $$NO
+	If $$CALLDEPTH == 0
+		GetValue "Enter Layer to Review:", $layer
+		GetLayer $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$tabLe
+		StrSet 	 $1, $ln
+	Else
+		StrCmp $1, "Top"
+		If $$STATUS == 0
+			Set $lt1   = 0
+			Set $lt2   = 9
+			Set $layer = $gModPasteT
+		Else
+			StrCmp $1, "Both"
+			If $$STATUS == 0
+				Set $lt1    = 0
+				Set $lt2    = 9
+				Set $layer  = $gModPasteT
+				Set $lt3    = 2
+				Set $lt4    = 10
+				Set $layer2 = $gModPasteB
+				Set $both   = $$YES
+				StrSet $1, "Top"
+			Else
+				Set $lt1   = 2
+				Set $lt2   = 10
+				Set $layer = $gModPasteB
+			End
+		End
+	End
+	GetExtents $layer, $lx,$ly, $ux,$uy, $$YES, $$NO
+	StrWrite $log, "Extents Layer %.0n, lx=%n, ly=%n, ux=%n, uy=%n", $layer, $lx,$ly, $ux,$uy
+	LogMessage 0, $log
+	Set $X = $ux - $lx
+	Set $Y = $uy - $ly
+	StrWrite $log, "Image height X=%n, Y=%n", $X, $Y
+	LogMessage 0, $log
+	Set $tabsX = 0
+	Set $tabsY = 0
+	Set $Size  = $X
+	Repeat $Size >= 0
+		Calc $Size  = $Size  - 2
+		Calc $tabsX = $tabsX + 1
+	End
+	Calc   $Size  = $Size /2
+	Calc   $lx    = $lx + $Size
+	Set    $Size  = $Y
+	Repeat $Size >= 0
+		Calc $Size  = $Size  - 2
+		Calc $tabsY = $tabsY + 1
+	End
+	Calc $Size = $Size /2
+	Calc $ly = $ly + $Size
+	# Setup Tab Names
+	Calc $num = $tabsX * $tabsY
+	StrArray $tab($num)
+	Set $numCount = $num
+	Set $num = 1
+	Repeat $num <= $numCount
+		StrWrite $tab($num), "%s %1.0n", $1, $num
+		Calc $num = $num + 1
+	End
+	Set $yCount = 1
+	Set $num    = 1
+	Set $tabLy  = $ly - 2
+	Set $tabUy  = $ly
+	Repeat $yCount <= $tabsY
+		# setup 1st of the view tabs
+		Calc $tabLx = $lx
+		Calc $tabLy = $tabLy + 2
+		Calc $tabUx = $lx    + 2
+		Calc $tabUy = $tabUy + 2
+		Set  $xCount  = 1
+		Repeat $xCount <= $tabsX
+			AddViewTab
+				TabName $tab($num)
+				If $$CALLDEPTH == 0
+					Layer = $layer
+				Else
+					LayerType $lt1, $lt2
+				End
+				Go $tabLx,$tabLy, $tabUx,$tabUy
+				# Window    $tabLx, $tabLy, $tabUx, $tabUy
+				# Go
+			End
+			StrWrite $log, "ViewTab %s, lx=%n, ly=%n, ux=%n, uy=%n", $tab($num), $tabLx,$tabLy, $tabUx,$tabUy
+			LogMessage 0, $log
+			Calc $xCount = $xCount + 1
+			Calc $num    = $num    + 1
+			Calc $tabLx  = $tabLx  + 2
+			Calc $tabUx  = $tabUx  + 2
+		End
+		Calc $yCount = $yCount + 1
+	End
+	Set $num = 1
+	Repeat $num <= $numCount
+		SelectViewTab $tab($num)
+		Pause 0. "Reviewing Layer", "Do not click or attempt fixes, simply note issues and return to the appropriate tab when review is finished"
+		Calc $num = $num + 1
+	End
+	If $both == $$YES
+		GetExtents $layer2, $lx,$ly, $ux,$uy, $$YES, $$NO
+		Set   $X = $ux - $lx
+		Set   $Y = $uy - $ly
+		Set $tabsX = 0
+		Set $tabsY = 0
+		Set $Size  = $X
+		StrSet $1, "Bot"
+		Repeat $Size >= 0
+			Calc $Size  = $Size  - 2
+			Calc $tabsX = $tabsX + 1
+		End
+		Calc $Size = $Size / 2
+		Calc $lx   = $lx + $Size
+		Set  $Size = $Y
+		Repeat $Size >= 0
+			Calc $Size  = $Size  - 2
+			Calc $tabsY = $tabsY + 1
+		End
+		Calc $Size = $Size / 2
+		Calc $ly = $ly + $Size
+		#Setup Tab Names
+		Calc $num = $tabsX * $tabsY
+		StrArray $tab2($num)
+		Set $numCount = $num
+		Set $num = 1
+		Repeat $num <= $numCount
+			StrWrite $tab2($num), "%s %1.0n", $1, $num
+			Calc $num = $num + 1
+		End
+		Set $yCount = 1
+		Set $num    = 1
+		Set $tabLy  = $ly - 2
+		Set $tabUy  = $ly
+		Repeat $yCount <= $tabsY
+			# setup 1st of the view tabs
+			Calc $tabLx = $lx
+			Calc $tabLy = $tabLy + 2
+			Calc $tabUx = $lx    + 2
+			Calc $tabUy = $tabUy + 2
+			Set  $xCount = 1
+			Repeat $xCount <= $tabsX
+				AddViewTab
+					TabName   $tab2($num)
+					LayerType $lt3, $lt4
+					Go $tabLx,$tabLy, $tabUx,$tabUy
+					# Window    $tabLx, $tabLy, $tabUx, $tabUy
+					# Go
+				End
+				Calc $xCount = $xCount + 1
+				Calc $num    = $num    + 1
+				Calc $tabLx  = $tabLx  + 2
+				Calc $tabUx  = $tabUx  + 2
+			End
+			Calc $yCount = $yCount + 1
+		End
+		Set $num = 1
+		Repeat $num <= $numCount
+			SelectViewTab $tab2($num)
+			Pause 0. "Reviewing Layer", "Do not click or attempt fixes, simply note issues and return to the appropriate tab when review is finished"
+			Calc $num = $num + 1
+		End
+	End
+	If $gCADmatic
+		SelectViewTab "Log"
+	Else
+		SelectViewTab "Main"
+	End
+	If $$CALLDEPTH == 0
+		MessageBox "Review Complete", "Please fix any issues found and re-run review If needed", 0
+	Else
+		MessageBox "Review Complete", "Press OK to continue to Check Plot.\r\rPress Cancel to Stop Check Plot and fix issues", 1
+		If $$STATUS == $$NO
+		StrWrite $log, "DataReview macro cancelled.\r\rMake changes then press F3 to re-run Data Review \r\r%s", $$TIME
+		LogMessage 0, $log
+			Stop $log
+		End
+	End
+ENDMACRO

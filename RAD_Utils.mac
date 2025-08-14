@@ -1,0 +1,2990 @@
+MACRO AddAlignmentPoints
+	# $1 = Layer, $2 = Mirrored
+	# Macro AddAlignmentPoints Written by Robbie Devennie on 2024-03-05
+	StrWrite $log, "AddAlignmentPoints Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $layer 	  = 1
+	Set $mirrored = $$NO
+	If $$CALLDEPTH > 0
+		Set $layer 	  = $1
+		Set $mirrored = $2
+	Else
+		Set $layer 	  = $$ACTIVELAYER
+		GetYesNo "Add Alignment Points Mirrored?", $mirrored
+	End
+	StrSet $alignmentPoints, ""
+	GetDesignProperty "alignmentPoints", $alignmentPoints
+	StrCmp $alignmentPoints, ""
+	If $$STATUS == 0
+		StrSet $alignmentPoints, "9.3425,0,-9.3425,0"
+		StrWrite $log, "Frame Type not found. Defaulting to (%s)", $alignmentPoints
+		LogMessage 0, $log
+	End
+	# Parse Alignment points
+	If $mirrored == $$NO
+		StrRead $alignmentPoints, "%n,%n,%n,%n", $x1,$y1, $x2,$y2
+	Else
+		StrRead $alignmentPoints, "%n,%n,%n,%n", $x2,$y2, $x1,$y1
+	End
+	Set $xSize 		= 0.02
+	Set $ySize 		= 0.02
+	Set $dcodeRound = 10
+	GetFreeDcode $dcodeRound
+	PutDcodeInfo $dcodeRound, $$ROUND, 	   $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	Set $dcodeRect  = 10
+	GetFreeDcode $dcodeRect
+	PutDcodeInfo $dcodeRect,  $$RECTANGLE, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	ActiveLayer  $layer
+	StrWrite $log, "Adding Round Alignment point to (%.3n, %.3n) on Layer %.0n", $x1, $y1, $layer
+	LogMessage 0, $log
+	CurrentDcode $dcodeRound
+	AddFlash 	 $x1, $y1
+	StrWrite $log, "Adding Rect Alignment point to (%.3n, %.3n) on Layer %.0n", $x2, $y2, $layer
+	CurrentDcode $dcodeRect
+	AddFlash 	 $x2, $y2
+ENDMACRO
+
+MACRO AddIsoDate
+	# Macro AddIsoDate Written by Robbie Devennie on 2023-03-15
+	StrWrite $log, "AddIsoDate Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	StrSet $DateISO, ""
+	CALLMACRO _GetISODate, $DateISO
+	AddText $DateISO
+ENDMACRO
+
+MACRO FlattenAllCustoms
+	# Macro FlattenAllCustoms Written by Robbie Devennie on 2024-02-14
+	StrWrite $log, "FlattenAllCustoms Macro Called %s", $$TIME
+	LogMessage 0, $log
+	#  Flatten customs and compress ap table prior to iteration
+	FlattenCustom
+	CompactApList $$YES
+	# Set initial d-code
+	Set $maxDcode = 10
+	Set $dCode    = 10
+	# Get max d-code
+	GetFreeDcode $maxDcode
+	Repeat $dCode < $maxDcode
+		Set $flatten = 0
+		GetDcodeInfo $dCode, $shape, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+		Calc $dCode = $dCode + 1
+		If $rotation > 0
+			Set $flatten = 1
+		End
+		If $shape == $$CUSTOM
+			Set $flatten = 1
+		End
+		If $flatten == 1
+			FlattenCustom $custom
+			FlattenDcode $dCode
+		End
+	End
+	CompactApList $$YES
+ENDMACRO
+
+MACRO FolderReview
+	# Macro FolderReview Written by Robbie Devennie on 2024-10-18
+	StrWrite $log, "FolderReview Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	StrSet $formTitle, "Folder Review"
+	Set $openFolderClicked 		= $$FALSE
+	Set $sendToDattoClicked 	= $$FALSE
+	Set $closeClicked 			= $$FALSE
+	Set $formId = 1
+	Set $margin = 0.4
+	Set $controlId01 = -1
+	Set $controlId02 = -1
+	Set $controlId03 = -1
+	Set $controlId04 = -1
+	Set $controlId05 = -1
+	Set $controlId06 = -1
+	Set $controlId07 = -1
+	StrArray $CADGroups(3)
+		StrSet $CADGroups(1), "ITAR"
+		StrSet $CADGroups(2), "BRS"
+		StrSet $CADGroups(3), "FCTA_MX"
+		Set $CADGroupsChoice = 1
+		# Get the app data path
+	GetAppDataFolder $appDataPath
+
+	Repeat $closeClicked == $$FALSE
+		DefineForm
+			FormId 	$formId
+			Title  	$formTitle
+			Margin 	$margin
+			StaticText           $controlId01, 0.00, 0.20, 1.50, 0.50, "Open local folder", $$FALSE
+			ButtonControl        $controlId02, 1.50, 0.00, 2.00, 0.50, "Open C: Drive", $openFolderClicked
+			StaticText           $controlId03, 0.00, 0.80, 3.00, 0.50, "Select CAD Group", $$FALSE
+			RadioButtonControls  $controlId04, 0.00, 1.10, 3.50, 0.50, 3, $CADGroups, $CADGroupsChoice, $$FALSE, $$TRUE
+			StaticText           $controlId05, 0.00, 1.90, 1.50, 0.50, "Send to Datto", $$FALSE
+			ButtonControl        $controlId06, 1.50, 1.70, 2.00, 0.50, "Send to M: Drive", $sendToDattoClicked
+			ButtonControl        $controlId07, 0.20, 2.50, 3.00, 0.50, "Close", $closeClicked
+		End
+		OpenForm $formId
+		# Send to Datto
+		If $sendToDattoClicked == $$TRUE
+			StrSet 	$CADGroup, $CADGroups($CADGroupsChoice)
+			StrCmp $CADGroup, "ITAR"
+			If $$STATUS == 0
+				StrSet $category, "ITAR"
+			Else
+				StrSet $category, "NonITAR"
+			End
+			StrWrite $bat, "%s\\macros\\ReferenceFiles\\SendToDatto.bat", $appDataPath
+			StrWrite $cmd, "%s \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"", $bat, "M", $$DSNNAME, $category, $CADGroup, $gCustomer
+			StrWrite $log, "CMD: %s", $cmd
+			LogMessage 0, $log
+			SysCmd $cmd
+		End
+		# Open the folder in the same directory as the VCAM file
+		If $openFolderClicked == $$TRUE
+			StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenFolder.bat", $appDataPath
+			StrWrite $cmd, "%s %s", $bat, $gDir
+			SysCmd 	 $cmd
+		End
+	End
+ENDMACRO
+
+MACRO GenerateNSG
+	# Macro GenerateNSG Written by Robbie Devennie on 2023-04-06
+	StrWrite $log, "GenerateNSG Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $dCode    = 10
+	Set $brdr     = 0
+	Set $padding  = 0.3
+	Set $nsgLayer = 1
+	Set $yesNo 	  = $$NO
+	StrSet $extents, "string"
+	StrSet $nsgName, "NanoSlicLayer"
+	If $$CALLDEPTH > 0
+		StrSet $nsgName, $1 # Set Layer Name from other macro.
+		Set $nsgLayer = $2 # set Layer from other macro.
+		CALLMACRO _ClearLayer, $nsgLayer, 1
+	Else
+		GetFreeLayer $nsgLayer
+	End
+	StrWrite $log, "Generating NSG Layer on %.0n, %s", $nsgLayer, $nsgName
+	LogMessage 0, $log
+	CALLMACRO _GetBoardProfileLyr, $brdr # This private funciton exists inside WISE_CenterLayers.mac
+	If $brdr > 0
+		If $gComboYesNo == $$NO
+			If $gCADmatic
+				Set $yesNo = $$YES
+			Else
+				GetYesNo "Use Border Layer as NSG limits?\r\r(single image only)", $yesNo
+			End
+		End
+	End
+	If $yesNo
+		CALLMACRO _GetAllBorderExtents, $extents
+		StrRead $extents, "%n %n %n %n", $lx,$ly, $ux,$uy
+	Else
+		MessageBox "Data to structure", "Window around the data you wish to structure.\r\rOnce selected press End then press Esc", 1
+		GetTempLayer $tempLayer, $$LTBORDER
+		Copy
+			By           $$WINDOWMODE
+			Boundary     $$YES
+			Flashes      $$YES
+			Draws        $$YES
+			Arcs         $$YES
+			Polys        $$YES
+			Text         $$YES
+			Drills       $$YES
+			Slots        $$YES
+			DrillCircles $$YES
+			DrillText    $$YES
+			MillPaths    $$YES
+			MillCircles  $$YES
+			Dcode        0
+			Tool         0
+			Polarity     0
+			Layer        0
+			ToLayer      $tempLayer
+			InPlace      $$YES
+			Go
+		End
+		GetExtents 		$tempLayer, $lx,$ly, $ux,$uy, $$YES
+		StrWrite 		$log, "TempLayer %n, lx=%n, ly=%n, ux=%n, uy=%n", $tempLayer, $lx,$ly, $ux,$uy
+		LogMessage 		0, $log
+		FreeTempLayer 	$tempLayer
+	End
+	Set  $xSize = $ux - $lx
+	Set  $ySize = $uy - $ly
+	Calc $xSize = $xSize + $padding
+	Calc $ySize = $ySize + $padding
+	Calc $ctrX  = $ux + $lx
+	Calc $ctrY  = $uy + $ly
+	Calc $ctrX  = $ctrX / 2
+	Calc $ctrY  = $ctrY / 2
+	GetFreeDcode $dCode
+	# GetDcodeInfo $dCode, $shp, $cus, $x, $y, $typ, $used, $flags, $scr
+	PutDcodeInfo $dCode, $$RECTANGLE, $cus, $xSize, $ySize, $typ, $used, $flags, $scr
+	CurrentDcode $dCode
+	StrWrite   	 $extents, "%n %n %n %n", $lx,$ly, $ux,$uy
+	StrWrite   	 $log, "NSG Extents = %s", $extents
+	LogMessage 	 0, $log
+	ActiveLayer  $nsgLayer
+	AddFlash 	 $ctrX, $ctrY
+
+	If $dCode > 999
+		MessageBox "Compact Required Warning", "NSG files require the D-Code ID to be under 1000.\r\rAperture Table will be compacted.\r\rOK to continue Or Cancel to compact manually later.", 1
+		If $$STATUS
+			CompactApList $$YES
+		End
+	End
+	StrCat $nsgName, ".nsg"
+	Layern $nsgLayer
+		LyrName    $nsgName
+		Visibility 0
+		FlashColor "0x6ab653"
+		DrawColor  "0x9eb3ba"
+	End
+	Layern $nsgLayer
+		ExportFormat "Gerber"
+			Dialect         "RS274X"
+			M.N             3,3
+			Mode            "Absolute"
+			ZeroSuppression "Leading"
+			Terminator      "*\r\n"
+			CharSet         "ASCII"
+			Metric          $$YES
+			Modal           $$NO
+			Nets            $$NO
+			Userdata        $$YES
+			Gcmds           $$YES
+			Comments        $$YES
+			FlattenCustoms  $$YES
+		End
+		File $nsgName
+	End
+	If $gCADmatic
+		# not needed for CADmatic users
+	Else
+		ViewAll
+	End
+ENDMACRO
+
+MACRO MergeShapes
+	# Macro MergeShapes Written by Designer on 2025-03-05
+	StrWrite $log, "MergeShapes Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Create the temporary layers
+	GetTempLayer $holdingLayer, $$LTOTHER
+	GetTempLayer $polyLayer, $$LTOTHER
+	# Get the window around the shapes to be merged
+	GetWindow "Window around the shapes that you want to merge. (Note: The shapes must be on the same layer.)", $x1,$y1, $x2,$y2
+	# Move the shapes to the holding layer
+	Move
+		By           $$WINDOWMODE
+		Boundary     $$NO
+		AddTypes     0
+		Polarity     0
+		Layer        $$ACTIVELAYER
+		ToLayer      $holdingLayer
+		InPlace      $$YES
+		Go  $x1,$y1, $x2,$y2
+	End
+	# convert layer to flashes
+	DrawnPads
+		By                   $$WINDOWMODE
+		Boundary             $$YES
+		Draws                $$YES
+		Arcs                 $$YES
+		Text                 $$YES
+		Polys                $$YES
+		Dcode                "All"
+		Layer                $holdingLayer
+		Tool                 "All"
+		Tolerance            0.01
+		Method               0
+		ReplaceRotated       $$YES
+		IncludeIsolatedItems $$YES
+		Go	$x1,$y1, $x2,$y2
+	End
+	# Convert the shapes into a polygon layer
+	Composite2Layer
+		CompositeLayer  $holdingLayer
+		ToLayer         $polyLayer
+		Method          0
+		Go
+	End
+	# Erase the flashes from the polygon layer
+	Erase
+		By           $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$NO
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		Layer        $polyLayer
+		Go  $x1,$y1, $x2,$y2
+	End
+	# Move the merged shapes to the active layer
+	Move
+		By           $$WINDOWMODE
+		Boundary     $$NO
+		AddTypes     0
+		Polarity     0
+		Layer        $polyLayer
+		ToLayer      $$ACTIVELAYER
+		InPlace      $$YES
+		Go  $x1,$y1, $x2,$y2
+	End
+	# Free the temporary layers from memory
+	FreeTempLayer $polyLayer
+	FreeTempLayer $holdingLayer
+ENDMACRO
+
+MACRO OnNew
+	# Macro OnNew Written by Designer on 2025-02-25
+	SelectViewTab "Main" # Select the Main tab when the user Opens a New window.
+	Undo $$YES
+ENDMACRO
+
+MACRO Purge
+	# Macro Purge Written by Robbie Devennie on 2024-04-23
+	StrWrite $log, "Purge Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Purge
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+ENDMACRO
+
+MACRO RAD_CheckCutLayerForFids
+	# Macro RAD_CheckCutLayerForFids Written by Robbie Devennie on 2024-08-13
+	StrWrite $log, "RAD_CheckCutLayerForFids Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# $1 Cut Layer
+	# $2 Fid Layer
+	# $3 yes/no Issues found
+	# Set layers
+	If $$CALLDEPTH > 0
+		Set $cutLayer = $1
+		Set $fidLayer = $2
+	Else
+		Set $cutLayer = $gCutT # 12
+		Set $fidLayer = $gFidT # 16
+	End
+	# Make an empty select group
+	SelectGroup
+		Mode	0
+		Go
+	End
+	# Find entities on Fid layer
+	GetFirstItem $fidLayer, $seqNo, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	Repeat $$STATUS != $$FALSE
+		# Add cut layer aps to selct group if on fid layer ap location
+		If $type == $$FLASH
+			SelectGroup
+				By           0 # 0=item, 1=window, 4=net
+				Boundary     $$YES
+				Flashes      $$YES
+				Draws        $$YES
+				Arcs         $$YES
+				Polys        $$YES
+				Text         $$NO
+				Dcode        0
+				Layer        $cutLayer
+				Polarity     2
+				Mode         1
+				Go $x,$y
+			End
+		End
+		GetNextItem
+	End
+	#  Check select group size
+	If $$SELGRPCNT > 0
+		# GetTempLayer $tempLayer, $$LTOTHER
+		Set $freeLayer = 1
+		GetFreeLayer $freeLayer
+		Layern $freeLayer
+			LyrName     "Potential_Errors"
+			FlashColor  "0x6347ff"
+			DrawColor   "0x6347ff"
+		End
+		StrWrite $log, "Possible conflict on fid Layer (%.0n) and modified paste layer (%.0n) please review layer %.0n for stacked ap locations.", $fidLayer, $cutLayer, $freeLayer
+		LogMessage 0, $log
+		MessageBox "Warning", $log, 0
+		Copy
+			By     	$$GROUPMODE
+			ToLayer	$freeLayer
+			InPlace	$$YES
+			Go 0,0, 0,0
+		End
+		If $$CALLDEPTH > 0
+			Set $3 = $$YES
+		End
+	Else
+		# Do nada
+	End
+	SelectGroup
+		Mode	0
+		Go
+	End
+
+ENDMACRO
+
+MACRO RAD_ChooseCenter
+	# Macro ChooseCenter Written by Robbie Devennie on 2024-01-02
+	StrWrite $log, "RAD_ChooseCenter Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $layer			= 0
+	Set $continue		= $$TRUE
+	Set $formId      	= -1
+	Set $Static1     	= -1
+	Set $EditControl1	= -1
+	Set $RadioControl	= -1
+	Set $radioChoice1	= -1
+
+	StrWrite $layerStr, "%.0n", $layer
+	StrArray $centerOptions(3)
+		StrSet $centerOptions(1), "Both"
+		StrSet $centerOptions(2), "Horizontally"
+		StrSet $centerOptions(3), "Vertically"
+
+	DefineForm
+		FormId	$formId
+		Title 	"Center Layer"
+		Margin	0.2
+		StaticText			$Static1, 		0.50, 0.50, 1.50, 0.25, "Enter Layer to center:", $$FALSE
+		EditControl			$EditControl1,  2.25, 0.50, 1.50, 0.25, $layerStr
+		StaticText			$Static1, 		0.50, 0.80, 3.00, 0.25, "0 for all visible layers:", $$FALSE
+		RadioButtonControls	$RadioControl,	0.50, 1.20, 4.00, 0.50, 3, $centerOptions, $radioChoice1, $$FALSE, $$TRUE
+	End
+	Repeat $continue
+		OpenForm $formId
+		StrRead $layerStr, "%n", $layer
+		StrWrite $log, "Centering Layer %.0n %s", $layer, $centerOptions($radioChoice1)
+		LogMessage 0, $log
+		Set $ctrX  = 0.0
+		Set $ctrY  = 0.0
+		CALLMACRO _GetCenter, $layer, $ctrX, $ctrY # This private funciton exists inside WISE_CenterLayers.mac
+		GetExtents $layer, $lx,$ly, $ux,$uy, $$YES
+		SelectFilter
+			AddTypes 0
+		End
+		StrCmp $centerOptions($radioChoice1), "Horizontally"
+		If $$STATUS == 0
+			Set $ctrY = 0
+		End
+		StrCmp $centerOptions($radioChoice1), "Vertically"
+		If $$STATUS == 0
+			Set $ctrX = 0
+		End
+		Move
+			By 	  $$WINDOWMODE
+			Boundary     $$YES
+			Flashes      $$YES
+			Draws        $$YES
+			Arcs         $$YES
+			Polys        $$YES
+			Text         $$YES
+			Drills       $$YES
+			Slots        $$YES
+			DrillCircles $$YES
+			DrillText    $$YES
+			MillPaths    $$YES
+			MillCircles  $$YES
+			InPlace      $$YES
+			Layer        $layer
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, 0,0
+			# Both $ctrY & $ctrX from _GetCenter function, Horizontally $ctrY overwritten to 0, Vertically $ctrX overwritten to 0
+		End
+		ViewAll
+		Set $continue = $$FALSE
+		If $layer > 0
+			GetYesNo "Center another layer?", $value # Only called If a non zero value was given before.
+			If $value == $$YES
+				Set $continue = $$TRUE
+			End
+		End
+	End
+	ViewAll
+ENDMACRO
+
+MACRO RAD_CreateTestCoupon
+	# Macro RAD_CreateTestCoupon Written by Robbie Devennie on 2024-03-07
+	StrWrite $log, "RAD_CreateTestCoupon Macro Called %s", $$TIME
+	LogMessage 0, $log
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+	# Get clip area
+	GetWindow "Window around data. Data Outside Window will be deleted on visible layers.", $lx,$ly, $ux,$uy
+	Clip
+		Boundary 	 $$NO
+		Outside 	 $$YES
+		Type 		 0
+		Flashes 	 $$YES
+		Draws 		 $$YES
+		Arcs 		 $$YES
+		Polys 		 $$YES
+		Text 		 $$YES
+		Drills 		 $$YES
+		Slots 		 $$YES
+		DrillCircles $$YES
+		DrillText 	 $$YES
+		MillPaths 	 $$YES
+		MillCircles  $$YES
+		Layer 		 0
+		Dcode 		 0
+		Tool 		 0
+		Polarity 	 0
+		Go $lx,$ly, $ux,$uy
+	End
+	Set $ctrX  = 0.0
+	Set $ctrY  = 0.0
+	CALLMACRO _GetCenter, 0, $ctrX, $ctrY # This private funciton exists inside WISE_CenterLayers.mac
+	Move
+		By 	  $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$YES
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		InPlace      $$YES
+		Layer        0
+		Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, 0,0
+		# Both $ctrY & $ctrX from _GetCenter function, Horizontally $ctrY overwritten to 0, Vertically $ctrX overwritten to 0
+	End
+	Set $freeLayer = 1
+	GetFreeLayer $freeLayer
+	StrSet $comments, "Generated in RAD_CreateTestCoupon"
+	Layern $freeLayer
+		LyrName	 	"Test.2"
+		Visibility 	1
+		Comments 	$comments
+	End
+	CALLMACRO RAD_TabHalfwayOnData, "mm", 0, $freeLayer, 0.05, 5
+	#* $1 → $units   {string}
+	#* $2 → $Layer   {numvar}
+	#* $3 → $Layerto {numvar}
+	#* $4 → $LenTab  {numvar}
+	#* $5 → $Padding {numvar}
+	Redraw
+ENDMACRO
+
+MACRO RAD_CsvRead
+	# Macro RAD_CsvRead Written By Robbie Devennie on 2024-03-26
+	#* MACRO Test
+	#*     StrSet $myString, "string"
+	#*     StrSet $filePath, "C:\\ProgramData\\WISE Software Solutions\\VisualCAM 16.9\\macros\\ReferenceFiles\\example.csv"
+	#*     StrSet $delim,    ","
+	#*     CALLMACRO csvRead, $filePath, $delim, $myString
+	#*     StrWrite $log, "My string after being returned = %s", $myString
+	#*     LogMessage 0, $log
+	#* ENDMACRO
+	StrWrite $log, "RAD_CsvRead Macro Called %s", $$TIME
+	LogMessage 0, $log
+	If $$CALLDEPTH == 0
+		Set $filePickFormId   = -1
+		Set $margin           =  0.4
+		Set $controlId1       =  1
+		Set $editControl1     =  1
+		Set $staticId1        =  1
+		Set $staticId2        =  1
+		Set $headerChoice     =  2
+		Set $indexChoice      =  2
+		Set $btnControl1      = -1
+		Set $btnControl2      = -1
+		Set $okBtnClicked     = -1
+		Set $cancelBtnClicked = -1
+		StrSet $StaticText1, "File"
+		StrSet $StaticText2, "Deliminater"
+		StrSet $EditText1,   ","
+		DefineForm
+			FormId $filePickFormId
+			Title  "Pick CSV file"
+			Margin $margin
+			StaticText         $staticId1,    0.0, 0.0, 1.5, 0.5, $StaticText1, $$NO
+			FileBrowseControl  $controlId1,   1.5, 0.0, 3.0, 0.5, "File Browser", "C:", "Choose File", "csv", "Comma Separated Values | csv", 64, $FileName
+			StaticText         $staticId2,    0.0, 0.8, 1.5, 0.5, $StaticText2, $$NO
+			EditControl        $editControl1, 1.5, 0.8, 3.0, 0.5, $EditText1
+			ButtonControl      $btnControl1,  0.0, 1.6, 1.5, 1.0, "OK",     $okBtnClicked
+			ButtonControl      $btnControl2,  2.0, 1.6, 1.5, 1.0, "Cancel", $cancelBtnClicked
+		End
+		OpenForm $filePickFormId
+		If $okBtnClicked == $$FALSE
+			Stop "Macro cancelled By user"
+		End
+		StrSet $filePath, $FileName
+		StrSet $delim,    $EditText1
+	Else
+		StrSet $filePath, $1
+		StrSet $delim,    $2
+	End
+	FileOpen $fid, $filePath, "r"
+	# *************
+	# File load
+	If $$STATUS != 0
+		Repeat $$STATUS  > 0
+			FileRead $fid, "", $read
+			If $$STATUS != 0
+				Calc $cnt = $cnt + 1
+			End
+		End
+		FileClose $fid
+	Else
+		StrWrite $log, "Failed to read CSV File at\r\r%s", $filePath
+		LogMessage 3, $log
+		Stop $log
+	End
+	# *************
+	# Parse csv file
+	# **************************
+	# Get Headers
+	StrArray  $csvRows($cnt)
+	StrArray  $csvIndicies($cnt)
+	Calc      $lines = $cnt
+	Set       $cnt = 0
+	FileOpen  $fid, $filePath, "r"
+	FileRead  $fid, "", $headers
+	FileClose $fid
+	StrWrite  $log, "Headers=%s", $headers
+	LogMessage 0, $log
+	Set    $loops = 0
+	StrTok $token, $delim, $headers
+	Repeat $$STATUS > 0
+		Calc   $loops = $loops + 1
+		StrTok $token,  $delim,  0
+	End
+	StrArray $csvHeaders($loops)
+	Set $loops = 0
+	StrTok $header, $delim, $headers
+	Repeat $$STATUS > 0
+		Calc   $loops = $loops + 1
+		StrSet $csvHeaders($loops), $header
+		StrTok $header, $delim, 0
+	End
+	# **************************
+	# Get Rows and indices.
+	FileOpen $fid, $filePath, "r"
+	If $$STATUS != 0
+		Repeat $cnt < $lines
+			FileRead $fid, "", $line
+			StrTok $token, $delim, $line
+			Calc   $cnt = $cnt + 1
+			StrSet $csvRows($cnt), $line
+			StrSet $csvIndicies($cnt), $token
+		End
+		FileClose $fid
+	Else
+		StrWrite $log, "Failed to read company list at\r\r%s", $filePath
+		LogMessage 3, $log
+		Stop $log
+	End
+	# *************
+	Set $formId       = -1
+	Set $margin       = 0.4
+	Set $controlId1   = 1
+	Set $controlId2   = 1
+	Set $staticId1    = 1
+	Set $staticId2    = 1
+	Set $headerChoice = 2
+	Set $indexChoice  = 2
+	StrSet $StaticText1, "Header"
+	StrSet $StaticText2, "Index"
+	DefineForm
+		FormId          $formId
+		Title           "Get CSV Value"
+		Margin          $margin
+		StaticText      $staticId1,  0.0, 0.0, 1.5, 0.6, $StaticText1, $$NO
+		DropListControl $controlId1, 1.5, 0.0, 2.0, 0.6, $csvHeaders,  $headerChoice
+		StaticText      $staticId2,  0.0, 0.6, 1.5, 0.6, $StaticText2, $$NO
+		DropListControl $controlId2, 1.5, 0.6, 2.0, 0.6, $csvIndicies, $indexChoice
+	End
+	OpenForm $formId
+	StrSet $rowValues, $csvRows($indexChoice)
+	StrSet $targetValue, "Error"
+	Set $loops = 0
+	StrTok $token, $delim, $rowValues
+	Repeat $$STATUS > 0
+		Calc   $loops = $loops + 1
+		If $loops == $headerChoice
+			StrSet $targetValue, $token
+		End
+		StrTok $token, $delim, 0
+	End
+	StrWrite $message, "User Chose %s and %s,\r\rvalue=(%s)", $csvHeaders($headerChoice), $csvIndicies($indexChoice), $targetValue
+	MessageBox "Chosen Result", $message, 0
+	StrSet $3, $targetValue
+ENDMACRO
+
+MACRO RAD_FrameBuilder
+	# Macro RAD_FrameBuilder Written by Robbie Devennie on 2024-04-08
+	StrWrite $log, "RAD_FrameBuilder Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Setup form variables
+	Units $$INCHES
+	Set $formId	= -1
+	Set $margin	= 0.4
+	Set $controlId01 = -1
+	Set $controlId02 = -1
+	Set $controlId03 = -1
+	Set $controlId04 = -1
+	Set $controlId05 = -1
+	Set $controlId06 = -1
+	Set $controlId07 = -1
+	Set $controlId08 = -1
+	Set $controlId09 = -1
+	Set $controlId10 = -1
+	Set $controlId11 = -1
+	Set $controlId12 = -1
+	Set $controlId13 = -1
+	Set $controlId14 = -1
+	Set $buildFrame = $$FALSE
+	StrSet $foilWidth,   "23"
+	StrSet $foilHeight,  "27"
+	StrSet $frameWidth,  "25"
+	StrSet $frameHeight, "29"
+	StrSet $info, 	   	 "Enter details for New frame dimensions"
+	StrSet $frameName, 	 "New Frame spaces allowed"
+	StrSet $fileName,  	 "New-frame-no-spaces-allowed"
+	# Define User input form
+	DefineForm
+		FormId	$formId
+		Title	$info
+		Margin	$margin
+		StaticText 	  $controlId01, 0.00, 0.00, 1.50, 0.35, "Frame name:",                   $$FALSE
+		StaticText 	  $controlId03, 0.00, 0.50, 1.50, 0.35, "File name:",                    $$FALSE
+		StaticText 	  $controlId05, 0.00, 1.00, 1.50, 0.35, "Foil Width (inches):",          $$FALSE
+		StaticText 	  $controlId07, 0.00, 1.50, 1.50, 0.35, "Foil Height (inches):",         $$FALSE
+		StaticText 	  $controlId09, 0.00, 2.00, 1.50, 0.35, "Frame Width (inches):",         $$FALSE
+		StaticText 	  $controlId11, 0.00, 2.50, 1.50, 0.35, "Frame Height (inches):",        $$FALSE
+		EditControl	  $controlId02, 1.50, 0.00, 2.50, 0.35, $frameName
+		EditControl	  $controlId04, 1.50, 0.50, 2.50, 0.35, $fileName
+		EditControl	  $controlId06, 1.50, 1.00, 2.50, 0.35, $foilWidth
+		EditControl	  $controlId08, 1.50, 1.50, 2.50, 0.35, $foilHeight
+		EditControl	  $controlId10, 1.50, 2.00, 2.50, 0.35, $frameWidth
+		EditControl	  $controlId12, 1.50, 2.50, 2.50, 0.35, $frameHeight
+		ButtonControl $controlId14, 1.00, 3.00, 2.00, 0.60, "Build Frame", $buildFrame
+	End
+	OpenForm $formId
+	If $buildFrame == $$FALSE
+		Stop "Macro Stopped By user"
+	End
+	StrRead $foilWidth,   "%n", $foilWidthNum
+	StrRead $foilHeight,  "%n", $foilHeightNum
+	StrRead $frameWidth,  "%n", $frameWidthNum
+	StrRead $frameHeight, "%n", $frameHeightNum
+	Set $frameLayer = 10
+	CompactApList $$YES
+	# Draw foil
+	Set $foilDcode = 10
+	GetFreeDcode $foilDcode
+	Set $xSize = 0.01
+	Set $ySize = 0.01
+	PutDcodeInfo $foilDcode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	CurrentDcode $foilDcode
+	ActiveLayer  $frameLayer
+	Calc $x1 = $foilWidthNum  / -2
+	Calc $x2 = $foilWidthNum  /  2
+	Calc $y1 = $foilHeightNum / -2
+	Calc $y2 = $foilHeightNum /  2
+	AddDraw $x1,$y1, $x1,$y2
+	AddDraw $x1,$y2, $x2,$y2
+	AddDraw $x2,$y2, $x2,$y1
+	AddDraw $x2,$y1, $x1,$y1
+	# Draw frame
+	Set $frameDcode = 10
+	GetFreeDcode $frameDcode
+	Set $xSize = 0.025
+	Set $ySize = 0.025
+	PutDcodeInfo $frameDcode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	CurrentDcode $frameDcode
+	ActiveLayer  $frameLayer
+	Calc $x1 = $frameWidthNum  / -2
+	Calc $x2 = $frameWidthNum  /  2
+	Calc $y1 = $frameHeightNum / -2
+	Calc $y2 = $frameHeightNum /  2
+	AddDraw $x1,$y1, $x1,$y2
+	AddDraw $x1,$y2, $x2,$y2
+	AddDraw $x2,$y2, $x2,$y1
+	AddDraw $x2,$y1, $x1,$y1
+	ViewAll
+	Redraw
+	# Add Title Text
+	Set $textLayer = 11
+	ActiveLayer $textLayer
+	Calc $textPosY = $frameHeightNum / 2
+	Text
+		Height    0.5
+		Width     0.1
+		Rotate    0
+		Slant     0
+		Mirror    $$NO
+		Font      "Tahoma"
+		LineSpace 1
+		CharSpace 1
+	End
+	AddText $frameName, 0, $textPosY
+	GetExtents $textLayer, $lx,$ly, $ux,$uy
+	Calc $x2 = $ux / 2
+	SelectGroup
+		Mode 0
+		Go
+		Mode 1
+		By    $$WINDOWMODE
+		Boundary 	 $$YES
+		Flashes 	 $$NO
+		Draws 		 $$YES
+		Arcs 		 $$YES
+		Polys 		 $$YES
+		Text 		 $$YES
+		Drills 		 $$YES
+		Slots 		 $$YES
+		DrillCircles $$YES
+		DrillText 	 $$YES
+		MillPaths 	 $$YES
+		MillCircles  $$YES
+		Layer 		 $textLayer
+		Dcode 		 0
+		Tool 		 0
+		Polarity 	 0
+		Go $lx,$ly, $ux,$uy
+	End
+	Move
+		By		  $$GROUPMODE
+		Text      $$YES
+		Polarity  0
+		Layer     $textLayer
+		ToLayer   $frameLayer
+		InPlace   $$NO
+		Go $ux,0, $x2,0
+	End
+	# Add Printable Area Text
+	Set $textLayer = 11
+	ActiveLayer $textLayer
+	Calc $textPosY = $foilHeightNum / 2
+	Calc $textPosY = $textPosY + 0.35
+	Text
+		Height    0.25
+		Width     0.05
+		Rotate    0
+		Slant     0
+		Mirror    $$NO
+		Font      "Tahoma"
+		LineSpace 1
+		CharSpace 1
+	End
+	AddText "Printable Area Inside Line", 0, $textPosY
+	GetExtents $textLayer, $lx,$ly, $ux,$uy
+	Calc $x2 = $ux / 2
+	SelectGroup
+		Mode 0
+		Go
+		Mode 1
+		By    $$WINDOWMODE
+		Boundary 	 $$YES
+		Flashes 	 $$NO
+		Draws 		 $$YES
+		Arcs 		 $$YES
+		Polys 		 $$YES
+		Text 		 $$YES
+		Drills 		 $$YES
+		Slots 		 $$YES
+		DrillCircles $$YES
+		DrillText 	 $$YES
+		MillPaths 	 $$YES
+		MillCircles  $$YES
+		Layer 		 $textLayer
+		Dcode 		 0
+		Tool 		 0
+		Polarity 	 0
+		Go $lx,$ly, $ux,$uy
+	End
+	Move
+		By		  $$GROUPMODE
+		Text      $$YES
+		Polarity  0
+		Layer     $textLayer
+		ToLayer   $frameLayer
+		InPlace   $$NO
+		Go $ux,0, $x2,0
+	End
+	ActiveLayer $frameLayer
+	StrSet $stencilFooter, "M:\\VisualCAM\\Automation\\Frames\\Stencil-footer.vcam"
+	Calc $frameBottom  = $frameHeightNum / -2
+	Calc $footerOffset = $frameBottom 	  - 2
+	MergeDesign $stencilFooter, 0, 0
+	Set $footerLayer = 1
+	# Move Footer to Frame Layer
+	GetExtents $footerLayer, $lx,$ly, $ux,$uy
+	SelectGroup
+		Mode 0
+		Go
+		Mode 1
+		By    $$WINDOWMODE
+		Boundary 	 $$YES
+		Flashes 	 $$YES
+		Draws 		 $$YES
+		Arcs 		 $$YES
+		Polys 		 $$YES
+		Text 		 $$YES
+		Drills 		 $$YES
+		Slots 		 $$YES
+		DrillCircles $$YES
+		DrillText 	 $$YES
+		MillPaths 	 $$YES
+		MillCircles  $$YES
+		Layer 		 $footerLayer
+		Dcode 		 0
+		Tool 		 0
+		Polarity 	 0
+		Go $lx,$ly, $ux,$uy
+	End
+	Move
+		By $$GROUPMODE
+		Text      $$YES
+		Polarity  0
+		Layer     $footerLayer
+		ToLayer   $frameLayer
+		InPlace   $$NO
+		Go 0,0, 0,$footerOffset
+	End
+	CALLMACRO AllOff
+	ActiveLayer $frameLayer
+	Layern $frameLayer
+		LyrName $frameName
+		Visibility  1
+		FlashColor "0xff8080"
+		DrawColor  "0xc0c0c0"
+	End
+	Set $clearingLayer = 1
+	Repeat $clearingLayer < $$MAXLAYERS
+		If $clearingLayer != 10
+			CALLMACRO _ClearLayer, $clearingLayer, 1
+			Layern $clearingLayer
+				LyrName ""
+				Visibility 0
+			End
+		End
+		Calc $clearingLayer = $clearingLayer + 1
+	End
+	ViewAll
+	Redraw
+	StrWrite $filePath, "M:\\VisualCAM\\Automation\\Frames\\Under Review\\%s.vcam", $fileName
+	StrWrite $log, "Filepath = %s", $filePath
+	LogMessage 0, $log
+	SaveAs $filePath
+	StrWrite $log, "File saved to %s\r\rIf required continue editing then save to the same location.", $filePath
+	LogMessage 0, $log
+	MessageBox "File Saved", $log, 0
+ENDMACRO
+
+MACRO RAD_QuickerPanel
+	StrWrite $log, "RAD_QuickerPanel Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Initialize form and control Id variables
+	Set $formId 	= -1
+	Set $Edit0		= -1
+	Set $Edit1		= -1
+	Set $Edit2 		= -1
+	Set $Edit3		= -1
+	Set $Edit4 		= -1
+	Set $List1 		= -1
+	Set $Drop1		= -1
+	Set $Button1 	= -1
+	Set $Button2 	= -1
+	Set $Static0 	= -1
+	Set $Static1 	= -1
+	Set $Static2 	= -1
+	Set $Static3 	= -1
+	Set $Static4 	= -1
+	Set $Static5 	= -1
+	Set $Static6 	= -1
+	Set $lx 		= 0
+	Set $ux 		= 0
+	Set $ly 		= 0
+	Set $uy 		= 0
+	Set $height 	= 0
+	Set $length		= 0
+	Set	$mmConv 	= 0.03937008
+	# StrSet defines a variable as a string
+	StrSet $units,  ""
+	StrSet $tx,		""
+	StrSet $ty,		""
+	StrSet $cx,		"1"
+	StrSet $cy,		"1"
+	# Set default values
+	GetExtents $$ACTIVELAYER, $lx,$ly, $ux,$uy
+	Calc 		$length = $ux - $lx
+	Calc 		$length = $length / $mmConv
+	StrWrite 	$tx, "%n", $length
+	Calc 		$height = $uy - $ly
+	Calc 		$height = $height / $mmConv
+	StrWrite 	$ty, "%n", $height
+	# Create Array with options for units
+	# StrArray defines a variable as an array
+	StrArray $StrArray1(2)
+		StrSet   $StrArray1(1), "mm"
+		StrSet   $StrArray1(2), "Inches"
+		# Initialize the button clicked variables for the button controls
+	Set $OkClicked = $$FALSE
+	Set $CancelClicked = $$FALSE
+	Set $DropSel = 1 # sets mm as the default choice for the drop list.
+	# Define the form
+	DefineForm
+		FormId				$formId
+		Title				"RAD Quicker Panel"
+		Margin				0.4
+		StaticText			$Static0, 	0.50, 0.50, 2.0, 0.50, "Units:", $$FALSE
+		DropListControl		$Drop1,   	3.00, 0.50, 1.5, 0.50, $StrArray1, $DropSel
+		StaticText			$Static1, 	0.50, 1.00, 2.0, 0.50, "X point-to-point spacing", $$FALSE
+		EditControl			$Edit1, 	3.00, 1.00, 1.5, 0.25, $tx
+		StaticText			$Static2, 	0.50, 1.50, 2.0, 0.50, "Y point-to-point spacing", $$FALSE
+		EditControl			$Edit2,		3.00, 1.50, 1.5, 0.25, $ty
+		StaticText			$Static3, 	0.50, 2.00, 2.0, 0.50, "X number of copies", $$FALSE
+		EditControl			$Edit3, 	3.00, 2.00, 1.5, 0.25, $cx
+		StaticText			$Static4, 	0.50, 2.50, 2.0, 0.50, "Y number of copies", $$FALSE
+		EditControl			$Edit4,		3.00, 2.50, 1.5, 0.25, $cy
+		StaticText			$Static5, 	0.50, 3.25, 4.0, 0.50, "Ensure all layers with data to be panelized Are visible,", $$FALSE
+		StaticText			$Static6, 	0.50, 3.50, 4.0, 0.50, "then Window around the data to be panelized.", $$FALSE
+		ButtonControl		$Button1, 	1.25, 4.00, 1.0, 0.30, "OK", $OkClicked
+		ButtonControl		$Button2, 	2.50, 4.00, 1.0, 0.30, "Cancel", $CancelClicked
+	End
+	OpenForm $formId
+	StrWrite $units, "%s", $Edit0
+	StrWrite $sizeAndCount,  "%s,%s,%s,%s", $tx, $ty, $cx, $cy
+	# Convert Strings to numbers
+	Set $ntx = 0
+	Set $nty = 0
+	Set $ncx = 0
+	Set $ncy = 0
+	StrRead $sizeAndCount, "%n,%n,%n,%n", $ntx, $nty, $ncx, $ncy
+	If $OkClicked == $$TRUE
+		StrCmp $StrArray1($DropSel), "mm"
+		If $$STATUS == 0
+			Calc $ntx = $ntx * $mmConv
+			Calc $nty = $nty * $mmConv
+		End
+		SelectFilter
+			By        $$WINDOWMODE
+			Boundary  $$YES
+			AddTypes  0
+			Dcode     0
+			Polarity  0
+		End
+		Panelize
+		Rows      $ncy
+		Cols      $ncx
+		TabSize   $ntx, $nty
+		AutoVent  $$NO
+		AutoPanel $$NO
+		# Document "panel.out"
+		Go # no values specified, so Query user.
+	End
+End
+ENDMACRO
+
+MACRO RAD_SegmentArcs
+	# Macro RAD_SegmentArcs Written by Designer on 2024-10-03
+	StrWrite $log, "RAD_SegmentArcs Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Get layer
+	If $$CALLDEPTH > 0
+		Set $layer = $1
+	Else
+		Set $layer = $$ACTIVELAYER
+		GetValue "Enter Layer number", $layer
+	End
+	# Get extents of layer
+	GetExtents $layer, $lx,$ly, $ux,$uy, $$TRUE, $$TRUE
+	CALLMACRO AllOff
+	ActiveLayer $layer
+	Layern $layer
+		Visibility 1
+	End
+	ConvPolyToDraw
+	# Segment arcs
+	SegmentArcs
+	ChordAngle 5
+	By         $$WINDOWMODE
+	Boundary   $$YES
+	Dcode      0
+	Layer      $layer
+	Go	$lx,$ly, $ux,$uy
+End
+ENDMACRO
+
+MACRO RAD_TabAroundData
+	# This macro creates tab lines around all data
+	# Current version written by Robbie Devennie
+	#  $units     → $1
+	#  $layerFrom → $2
+	#  $layerto   → $3
+	#  $lenCut    → $4
+	#  $lenTab    → $5
+	#  $padding   → $6
+	StrWrite $log, "RAD_TabAroundData Macro Called %s", $$TIME
+	LogMessage 0, $log
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+	Set $origActive = $$ACTIVELAYER
+	# Set defines a variable as a Number
+	Set $formId 	= -1
+	Set $Edit0		= -1
+	Set $Edit1		= -1
+	Set $Edit2		= -1
+	Set $Edit3		= -1
+	Set $Edit4		= -1
+	Set $Edit5		= -1
+	Set $List1		= -1
+	Set $Drop1		= -1
+	Set $Button1 	= -1
+	Set $Button2 	= -1
+	Set $Static0 	= -1
+	Set $Static1 	= -1
+	Set $Static2 	= -1
+	Set $Static3 	= -1
+	Set $Static4 	= -1
+	Set $Static5 	= -1
+	# Set Macro variables
+	Set $mmConv		= 0.03937008
+	Set $TMP		= 0
+	Set $TMPx		= 0
+	Set $startY		= 0
+	Set $lenx		= 0
+	Set $leny		= 0
+	Set $lenTabNum	= 0
+	Set $paddingNum	= 0
+	Set $lim		= 0
+	Set $tmpLim		= 5
+	Set $tmpCnt		= 0
+
+	Set $xSize = 0.001
+	Set $ySize = 0.001
+	Set $type  = 0
+	Set $dCode = 0
+	GetFreeDcode $dCode
+	PutDcodeInfo $dCode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	CurrentDcode $dCode
+
+	StrArray $StrArray1(2)
+		StrCpy $StrArray1(1), "Inches"
+	StrCpy $StrArray1(2), "mm"
+
+	# Initialize the Button clicked variables for the Button controls
+	Set $OkClicked 		= $$FALSE
+	Set $CancelClicked	= $$FALSE
+	#  Set units to users defualt
+	Units
+	If $$STATUS > 1
+		Set 	$DropSel  = 2 # sets "mm" as the default choice for the drop list.
+		StrSet 	$lencut,  "5"
+		StrSet 	$lenTab,  "0.2"
+		StrSet 	$padding, "10"
+	Else
+		Set 	$DropSel = 1 # sets "Inches" as the default choice for the drop list.
+		StrSet 	$lencut,  "0.25"
+		StrSet 	$lenTab,  "0.01"
+		StrSet 	$padding, "0.5"
+	End
+	StrSet 	$units,  		""
+	StrSet 	$layerto,		""
+	StrSet 	$formVariables,	""
+	Set $layerNum = $$ACTIVELAYER
+	Set $freeLayer = 1
+	GetFreeLayer $freeLayer
+	# Write next availible Layer to string variable
+	StrWrite $layerFrom, "%.0n", $layerNum
+	StrWrite $layerto, "%.0n", $freeLayer
+	# Define the form
+	DefineForm
+		FormId  $formId
+		Title   "Tab around Data"
+		Margin  0.5
+		StaticText		$Static0, 	0.50, 0.50, 2.00, 0.50, "units:", $$FALSE
+		DropListControl	$Drop1,   	3.00, 0.50, 1.50, 0.50, $StrArray1, $DropSel
+		StaticText		$Static1, 	0.50, 1.00, 2.00, 0.50, "Tab around Layer:", $$FALSE
+		EditControl		$Edit1, 	3.00, 1.00, 1.50, 0.25, $layerFrom
+		StaticText		$Static2, 	0.50, 1.50, 2.00, 0.50, "Add Tab on Layer:", $$FALSE
+		EditControl		$Edit2,		3.00, 1.50, 1.50, 0.25, $layerto
+		StaticText		$Static3, 	0.50, 2.00, 2.00, 0.50, "Cut Length:", $$FALSE
+		EditControl		$Edit3, 	3.00, 2.00, 1.50, 0.25, $lencut
+		StaticText		$Static4, 	0.50, 2.50, 2.00, 0.50, "Tab Length:", $$FALSE
+		EditControl		$Edit4,		3.00, 2.50, 1.50, 0.25, $lenTab
+		StaticText		$Static5, 	0.50, 3.00, 2.00, 0.50, "Padding:", $$FALSE
+		EditControl		$Edit5,		3.00, 3.00, 1.50, 0.25, $padding
+		ButtonControl	$Button1, 	1.25, 3.50, 1.00, 0.30, "OK", 	  $OkClicked
+		ButtonControl	$Button2, 	2.50, 3.50, 1.00, 0.30, "Cancel", $CancelClicked
+	End
+	If $$CALLDEPTH == 0
+		OpenForm $formId
+	Else
+		StrWrite $units,     "%s", $1
+		StrWrite $layerFrom, "%n", $2
+		StrWrite $layerto,   "%n", $3
+		StrWrite $lenCut,    "%n", $4
+		StrWrite $lenTab,    "%n", $5
+		StrWrite $padding,   "%n", $6
+		Set $OkClicked = $$TRUE
+	End
+
+	If $OkClicked == $$TRUE
+		StrWrite $units, "%s", $Edit0
+		StrWrite $formVariables, "%s,%s,%s,%s,%s", $layerFrom, $layerto,  $lencut,  $lenTab,  $padding
+		StrRead  $formVariables, "%n,%n,%n,%n,%n", $nlayer,    $nlayerto, $nlencut, $nlenTab, $npadding
+		# If mm is selected Convert lengths
+		StrCmp $StrArray1($DropSel), "mm"
+		If $$STATUS == 0
+			Calc $nlenTab  = $nlenTab  * $mmConv
+			Calc $nlencut  = $nlencut  * $mmConv
+			Calc $npadding = $npadding * $mmConv
+		End
+		GetExtents $nlayer, $lx,$ly, $ux,$uy
+		Calc $lenx = $ux - $lx
+		Calc $leny = $uy - $ly
+		Calc $ux   = $ux + $npadding
+		Calc $uy   = $uy + $npadding
+		Calc $lx   = $lx - $npadding
+		Calc $ly   = $ly - $npadding
+		Calc $nlenTabhalf = $nlenTab * 0.5
+		ActiveLayer	$nlayerto
+		Layern  $nlayerto
+			Visibility 1
+			LyrName "Tabbed Layer.2"
+		End
+		# Lower left corner moving up
+		Set $step	= $nlencut + $nlenTabhalf
+		Set $startY = $ly + $nlenTabhalf
+		Set $lim 	= $uy - $step
+		Set $TMPfin = $uy - $nlenTabhalf
+		Repeat $startY < $lim
+			Calc 	$endY 		= $startY + $nlencut
+			AddDraw	$lx, $startY, $lx, $endY
+			Calc 	$TMP 		= $nlencut + $nlenTab
+			Calc 	$startY 	= $startY + $TMP
+		End
+		AddDraw	$lx, $startY, $lx, $TMPfin
+		# Upper left corner moving right
+		Set $step	= $nlencut + $nlenTabhalf
+		Set $startX = $lx + $nlenTabhalf
+		Set $lim 	= $ux - $step
+		Set $TMPfin = $ux - $nlenTabhalf
+		Repeat $startX < $lim
+			Calc 	$endY 		= $startX + $nlencut
+			AddDraw	$startX, $uy, $endY, $uy
+			Calc 	$TMP 		= $nlencut + $nlenTab
+			Calc 	$startX 	= $startX + $TMP
+		End
+		AddDraw	$startX, $uy, $TMPfin, $uy
+		# Upper right corner moving down
+		Set $step	= $nlencut + $nlenTabhalf
+		Set $startY = $uy - $nlenTabhalf
+		Set $lim 	= $ly + $step
+		Set $TMPfin = $ly + $nlenTabhalf
+		Repeat $startY > $lim
+			Calc 	$endY 		= $startY - $nlencut
+			AddDraw	$ux, $startY, $ux, $endY
+			Calc 	$TMP 		= $nlencut + $nlenTab
+			Calc 	$startY 	= $startY - $TMP
+		End
+		AddDraw	$ux, $endY, $ux, $TMPfin
+		# Lower right corner moving left
+		Set $step	= $nlencut + $nlenTabhalf
+		Set $startX = $ux - $nlenTabhalf
+		Set $lim 	= $lx + $step
+		Set $TMPfin = $lx +	$nlenTabhalf
+		Repeat $startX > $lim
+			Calc 	$endY 		= $startX - $nlencut
+			AddDraw	$startX, $ly, $endY, $ly
+			Calc 	$TMP 		= $nlencut + $nlenTab
+			Calc 	$startX 	= $startX - $TMP
+		End
+		AddDraw	$startX, $ly, $TMPfin, $ly
+	End
+	ActiveLayer $origActive
+	Redraw
+ENDMACRO
+
+MACRO RAD_TabExistingBorder
+	# Macro RAD_TabExistingBorder Written by Robbie Devennie on 2024-04-10
+	StrWrite $log, "RAD_TabExistingBorder Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Set up form values
+	Set $formId = -1
+	Set $margin = 0.4
+	Set $controlId1 = -1
+	Set $controlId2 = -1
+	Set $controlId3 = -1
+	Set $controlId4 = -1
+	Set $controlId5 = -1
+	Set $clipBorder = $$FALSE
+	StrWrite $layerInput, "%.0n", $$ACTIVELAYER
+	StrSet $clipRadiusInput, "0.01"
+	DefineForm
+		FormId  $formId
+		Title   "Tab Existing Border"
+		Margin  $margin
+		StaticText    $controlId1, 0.00, 0.00, 2.00, 0.35, "Layer to clip", $$FALSE
+		StaticText    $controlId4, 0.00, 0.50, 2.00, 0.35, "Clip Radius (inches)", $$FALSE
+		EditControl   $controlId2, 2.00, 0.00, 2.00, 0.35, $layerInput
+		EditControl   $controlId3, 2.00, 0.50, 2.00, 0.35, $clipRadiusInput
+		ButtonControl $controlId5, 1.00, 1.20, 2.00, 0.60, "Clip Border", $clipBorder
+	End
+	OpenForm $formId
+	If $clipBorder == $$TRUE
+		StrRead $layerInput, "%n", $layer
+		StrRead $clipRadiusInput, "%n", $clipRadius
+		GetFirstItem $layer, $seqNo, $net, $dCode, $type, $x1,$y1, $x2,$y2, $dia, $cw, $flags
+		Repeat $$STATUS != $$FALSE
+			If $type == $$DBDRAW
+				Clip
+					Outside      $$NO
+					Type         3
+					Diameter     $clipRadius
+					By           $$WINDOWMODE
+					Boundary     $$YES
+					Flashes      $$NO
+					Draws        $$YES
+					Arcs         $$NO
+					Polys        $$NO
+					Text         $$NO
+					Drills       $$NO
+					Slots        $$NO
+					DrillCircles $$NO
+					DrillText    $$NO
+					MillPaths    $$NO
+					MillCircles  $$NO
+					Dcode        0
+					Tool         0
+					Layer        $layer
+					Polarity     0
+					Go $x1,$y1, $x2,$y2
+				End
+			End
+			GetNextItem
+		End
+	End
+ENDMACRO
+
+MACRO RAD_TabHalfwayOnData
+	# This macro creates tab lines around all data
+	# Current version written by Robbie Devennie
+	StrWrite $log, "RAD_TabHalfwayOnData Macro Called %s, CallDepth %.0n,", $$TIME, $$CALLDEPTH
+	LogMessage 0, $log
+	Set $xSize = 0.001
+	Set $ySize = 0.001
+	Set $type  = 0
+	Set $dCode = 0
+	GetFreeDcode $dCode
+	PutDcodeInfo $dCode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	CurrentDcode $dCode
+	# Set defines a variable as a number
+	Set $formId  = -1
+	Set $Edit0	 = -1
+	Set $Edit1	 = -1
+	Set $Edit2	 = -1
+	Set $Edit3	 = -1
+	Set $Edit4	 = -1
+	Set $List1	 = -1
+	Set $Drop1	 = -1
+	Set $Button1 = -1
+	Set $Button2 = -1
+	Set $Static0 = -1
+	Set $Static1 = -1
+	Set $Static2 = -1
+	Set $Static3 = -1
+	Set $Static4 = -1
+	# Set Macro variables
+	Set $mmConv		= 0.03937008
+	Set $midX		= 0
+	Set $midY		= 0
+	Set $lenX		= 0
+	Set $lenY		= 0
+	Set $lenTabNum	= 0
+	Set $paddingNum	= 0
+	StrSet $units,  		""
+	StrSet $layerTo,		""
+	StrSet $lineAs,			""
+	StrSet $lenTab, 		"0.05"
+	StrSet $padding, 		"10"
+	StrSet $formVariables,	""
+	# StrWrite 	$layer, "%.0n", $$ACTIVELAYER
+	StrArray $StrArray1(2)
+		StrSet $StrArray1(1), "Inches"
+		StrSet $StrArray1(2), "mm"
+		# Initialize the button clicked variables for the button controls
+	Set $OkClicked 		= $$FALSE
+	Set $CancelClicked 	= $$FALSE
+	Set $DropSel 		= 2 # sets "mm"as the default choice for the drop list.
+	# Get next free layer
+	Set $layer = 1
+	GetFreeLayer $layer
+	Layern $layer
+		Visibility  1
+	End
+	StrWrite $layerToString,   "%.0n", $layer
+	# Write next availible layer to string variable
+	Set  $layerFrom = $$ACTIVELAYER
+	StrWrite $layerFromString, "%.0n", $layerFrom
+	# Define the form
+	DefineForm
+		FormId	$formId
+		Title	"Tab around Data"
+		Margin	0.4
+		StaticText 		$Static0, 	0.50, 0.50, 2.00, 0.50, "units:", $$FALSE
+		DropListControl	$Drop1,   	3.00, 0.50, 1.50, 0.50, $StrArray1, $DropSel
+		StaticText     	$Static1, 	0.50, 1.00, 2.00, 0.50, "Tab around layer: (0 for all)", $$FALSE
+		EditControl   	$Edit1, 	3.00, 1.00, 1.50, 0.25, $layerFromString
+		StaticText     	$Static2, 	0.50, 1.50, 2.00, 0.50, "Add Tab on layer:", $$FALSE
+		EditControl  	$Edit2,		3.00, 1.50, 1.50, 0.25, $layerToString
+		StaticText     	$Static3, 	0.50, 2.00, 2.00, 0.50, "Tab length:", $$FALSE
+		EditControl   	$Edit3, 	3.00, 2.00, 1.50, 0.25, $lenTab
+		StaticText     	$Static4, 	0.50, 2.50, 2.00, 0.50, "Padding:", $$FALSE
+		EditControl  	$Edit4,		3.00, 2.50, 1.50, 0.25, $padding
+		ButtonControl  	$Button1, 	1.25, 3.00, 1.00, 0.30, "OK", $OkClicked
+		ButtonControl	$Button2, 	2.50, 3.00, 1.00, 0.30, "Cancel", $CancelClicked
+	End
+	If $$CALLDEPTH == 0
+		OpenForm $formId
+	Else
+		StrWrite $units,           "%s", $1
+		StrWrite $layerFromString, "%n", $2
+		StrWrite $layerToString,   "%n", $3
+		StrWrite $lenTab,          "%n", $4
+		StrWrite $padding,         "%n", $5
+		Set $OkClicked = $$TRUE
+	End
+	If $OkClicked == $$TRUE
+		StrWrite $units, "%s", $Edit0
+		StrWrite $formVariables, "%s,%s,%s,%s", $layerFromString, $layerToString, $lenTab, $padding
+		StrWrite $log, "$layerFromString = %s, $layerToString = %s, $lenTab = %s, $padding = %s", $layerFromString, $layerToString, $lenTab, $padding
+		LogMessage 0, $log
+		# Convert Strings to numbers
+		Set $nLayer 	  = 0
+		Set $nLayerto 	  = 0
+		Set $nLenTab 	  = 0
+		Set $nPadding 	  = 0
+		Set $nLenTabHalf  = 0
+		StrRead $formVariables, "%n,%n,%n,%n", $nLayer, $nLayerto, $nLenTab, $nPadding
+		# If mm is selected convert lengths
+		StrCmp $StrArray1($DropSel), "mm"
+		If $$STATUS == 0
+			LogMessage 0, "Using mm"
+			Calc $nLenTab 	= $nLenTab  * $mmConv
+			Calc $nPadding 	= $nPadding * $mmConv
+		End
+		GetExtents $nLayer, $lx,$ly, $ux,$uy
+		# Get midpoints
+		Calc	$tmp1 = $lx + $ux
+		Calc	$tmp2 = $ly + $uy
+		Calc	$lenX = $ux - $lx
+		Calc	$lenY = $uy - $ly
+		Calc	$tmp1 = $lenX / 2
+		Calc	$tmp2 = $lenY / 2
+		Calc	$midX = $lx + $tmp1
+		Calc	$midY = $ly + $tmp2
+		Calc	$uxi  = $ux - $nLenTab
+		Calc	$uyi  = $uy - $nPadding
+		Calc	$lxi  = $lx + $nLenTab
+		Calc	$lyi  = $ly + $nPadding
+		Calc	$ux   = $ux + $nPadding
+		Calc	$uy   = $uy + $nPadding
+		Calc	$lx   = $lx - $nPadding
+		Calc	$ly   = $ly - $nPadding
+		Calc	$nLenTabHalf = $nLenTab * 0.5
+		ActiveLayer	$nLayerto
+		# Lower left corner
+		AddDraw $lx + $nLenTabHalf, $ly, $midX - $nLenTabHalf, $ly
+		AddDraw $lx,$ly + $nLenTabHalf, $lx, $midY - $nLenTabHalf
+		# Upper left corner
+		AddDraw $lx + $nLenTabHalf, $uy, $midX - $nLenTabHalf, $uy
+		AddDraw $lx, $uy - $nLenTabHalf, $lx, $midY + $nLenTabHalf
+		# Lower right corner
+		AddDraw $ux - $nLenTabHalf, $ly, $midX + $nLenTabHalf, $ly
+		AddDraw $ux, $ly + $nLenTabHalf, $ux, $midY - $nLenTabHalf
+		# Upper right corner
+		AddDraw $ux - $nLenTabHalf, $uy, $midX + $nLenTabHalf, $uy
+		AddDraw $ux,$uy - $nLenTabHalf, $ux, $midY + $nLenTabHalf
+	End
+ENDMACRO
+
+MACRO RAD_ZoomToLayer
+	# Macro RAD_ZoomToLayer Written by Robbie Devennie on 2024-02-04
+	StrWrite $log, "RAD_ZoomToLayer Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Macro to select layer and soon the view to layer extents. Option to export.
+	If $$CALLDEPTH ==  0
+		Set $layer = 1 # Layer to be changed to a user choice
+	else
+		Set $layer = $1 # set Layer from other macro.
+	End
+	GetExtents $layer, $lx,$ly, $ux,$uy
+	ViewWindow $lx,$ly, $ux,$uy
+	ExportBitmap
+	OutFile           "C:\Users\Rob\\Documents\\temp\\image.png"
+	Format            "png"
+	Dpi               1200
+	Bw                $$NO
+	BwBkColor         "ffffff"
+	BaseProportionsOn 0
+	BatchMode         $$NO
+	Go
+End
+ENDMACRO
+
+MACRO RAD_paste_corners
+	StrWrite $log, "RAD_paste_corners Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $xSize = 0.001
+	Set $ySize = 0.001
+	Set $type  = 0
+	Set $dCode = 0
+	GetFreeDcode $dCode
+	PutDcodeInfo $dCode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	CurrentDcode $dCode
+	# Set defines a variable as a number
+	Set $formId 	= -1
+	Set $Edit0		= -1
+	Set $Edit1		= -1
+	Set $Edit2		= -1
+	Set $Edit3		= -1
+	Set $Edit4		= -1
+	Set $List1		= -1
+	Set $Drop1		= -1
+	Set $Button1 	= -1
+	Set $Button2 	= -1
+	Set $Static0 	= -1
+	Set $Static1 	= -1
+	Set $Static2 	= -1
+	Set $Static3 	= -1
+	Set $Static4 	= -1
+	# Set Macro variables
+	Set $mmConv		= 0.03937008
+	Set $midX		= 0
+	Set $midY		= 0
+	Set $lenX		= 0
+	Set $lenY		= 0
+	Set $hLineNum	= 0
+	Set $vLineNum	= 0
+	StrSet $units,  ""
+	StrSet $layer,	""
+	StrSet $layerTo,""
+	StrSet $lineAs,	""
+	StrSet $hLine, 	""
+	StrSet $vLine, 	""
+	StrWrite $layer, "%.0n", $$ACTIVELAYER
+	StrArray 	$StrArray1(2)
+		StrSet 	$StrArray1(1), "Inches"
+		StrSet 	$StrArray1(2), "mm"
+		GetExtents 	0, $lx,$ly, $ux,$uy
+	Calc $tmp1	=	$lx + $ux
+	Calc $tmp2	=	$ly + $uy
+	Calc $lenX	=	$ux - $lx
+	Calc $lenY	=	$uy - $ly
+	Calc $hLineNum	= $lenX / 2
+	Calc $vLineNum	= $lenY / 2
+	Calc $midX 	= 	$tmp1 * 0.5
+	Calc $midY 	= 	$tmp2 * 0.5
+	StrWrite	$hLine, "%n",	$hLineNum
+	StrWrite	$vLine, "%n",	$vLineNum
+	# Initialize the button clicked variables for the button controls
+	Set $OkClicked 		= $$FALSE
+	Set $CancelClicked	= $$FALSE
+	Set $DropSel 		= 2 # sets "mm"as the default choice for the drop list.
+	# Get next free layer
+	Set 		$layer = 1
+	GetFreeLayer 	$layer
+	StrWrite 	$layerToString, 	"%.0n", $layer
+	# Set Default values for form
+	StrSet 	$layerTo, 	$layerToString
+	StrSet 	$layerFrom, "0"
+	# Define the form
+	DefineForm
+		FormId			$formId
+		Title			"Add corners and paste lines"
+		Margin			0.5
+		StaticText		$Static0, 	0.50, 0.5, 2.0, 0.50, "units:",  $$FALSE
+		DropListControl	$Drop1,   	3.00, 0.5, 1.5, 0.50, $StrArray1, $DropSel
+		StaticText		$Static1, 	0.50, 1.0, 2.0, 0.50, "Paste Layer source: ", $$FALSE
+		EditControl		$Edit1, 	3.00, 1.0, 1.5, 0.25, $layerFrom
+		StaticText		$Static2, 	0.50, 1.5, 2.0, 0.50, "Add corners to layer: ", $$FALSE
+		EditControl		$Edit2,		3.00, 1.5, 1.5, 0.25, $layerTo
+		StaticText		$Static3, 	0.50, 2.0, 2.0, 0.50, "Horizontal line distance: ", $$FALSE
+		EditControl		$Edit3, 	3.00, 2.0, 1.5, 0.25, $hLine
+		StaticText		$Static4, 	0.50, 2.5, 2.0, 0.50, "Vertical line distance: ", $$FALSE
+		EditControl		$Edit4,		3.00, 2.5, 1.5, 0.25, $vLine
+		ButtonControl	$Button1, 	1.25, 3.0, 1.0, 0.30, "OK", $OkClicked
+		ButtonControl	$Button2, 	2.50, 3.0, 1.0, 0.30, "Cancel", $CancelClicked
+	End
+	OpenForm $formId
+
+	If $OkClicked == $$TRUE
+		StrWrite $units, "%s", $Edit0
+		StrWrite $sizeAndCount, "%s,%s,%s,%s", $layerFrom, $layerTo, $hLine, $vLine
+		# Convert Strings to numbers
+		Set $nLayer 	= 0
+		Set $nLayerto 	= 0
+		Set $nHLine 	= 0
+		Set $nVLine 	= 0
+		StrRead $sizeAndCount, "%n,%n,%n,%n", $nLayer, $nLayerto, $nHLine, $nVLine
+		# If mm is selected convert lengths
+		StrCmp $StrArray1($DropSel), "mm"
+		If $$STATUS == 0
+			Calc $nHLine = $nHLine * $mmConv
+			Calc $nVLine = $nVLine * $mmConv
+		End
+		GetExtents 	$nLayer, $lx,$ly, $ux,$uy
+		Calc $uxi = $ux - $nHLine
+		Calc $uyi = $uy - $nVLine
+		Calc $lxi = $lx + $nHLine
+		Calc $lyi = $ly + $nVLine
+		ActiveLayer		$nLayerto
+		# AddDraw <start x coord.>, <start y coor.>, <end x coord.>, <end y coord.>...
+		# Lower left corner
+		AddDraw	$lx,$ly, $lxi, $ly
+		AddDraw	$lx,$ly, $lx,$lyi
+		# Upper left corner
+		AddDraw	$lx, $uy, $lxi, $uy
+		AddDraw	$lx, $uy, $lx, $uyi
+		# Lower right corner
+		AddDraw	$ux, $ly, $uxi, $ly
+		AddDraw	$ux, $ly, $ux, $lyi
+		# Upper right corner
+		AddDraw	$ux,$uy, $uxi, $uy
+		AddDraw	$ux,$uy, $ux,$uyi
+	End
+ENDMACRO
+
+MACRO UndoActive
+	# Macro UndoActive Written by Robbie Devnnie on 2024-08-12
+
+	Undo $$YES
+	LogMessage 0, "Undo Set to active."
+
+ENDMACRO
+
+MACRO _AddJobNumToFidLayer
+	StrWrite $log, "_AddJobNumToFidLayer Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $origActive = $$ACTIVELAYER
+	# Add job number to engrave layer prior to export
+	# Set $1 = $gJobNum	# Text
+	# Set $2 = 3		# Layer
+	# Set $3 = $$YES	# Mirrored yes/no
+	If $$CALLDEPTH > 0
+		StrSet $text, 	$1
+		Set $layer 	  = $2
+		Set $mirrored = $3
+	Else
+		StrSet $text, 	"TrialText"
+		Set $layer 	  = $$ACTIVELAYER
+		Set $mirrored = $$YES
+	End
+	Set $Height 	= 0.25
+	Set $Width 		= 0.15
+	Set $LineSpace 	= 1.00
+	Set $CharSpace 	= 1.00
+	Set $dCode  = 10
+	GetFreeDcode $dCode
+	GetDcodeInfo $dCode, $shape, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	Set $xSize = .001
+	PutDcodeInfo $dCode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	CurrentDcode $dCode
+	Set $Rot = 0
+	Set $textOffsetX  = 0
+	Set $textOffsetY  = 0
+	CALLMACRO _GetDefaultTextPosition
+	GetDesignProperty "textOffset", $textOffset
+	StrRead $textOffset, "%n,%n", $textOffsetX, $textOffsetY
+	Calc $textOffsetX = $textOffsetX + 1.5
+	ActiveLayer $layer
+	Text
+		Height    $Height
+		Width     $Width
+		Rotate    $Rot
+		Slant     0
+		Mirror    $mirrored
+		Font      "Stroke-Stencil"
+		LineSpace $LineSpace
+		CharSpace $CharSpace
+		Go	$text, $textOffsetX, $textOffsetY
+	End
+	Layern $layer
+		Visibility  1
+	End
+	If $gCADmatic
+		# not needed for CADmatic users
+	Else
+		Redraw
+	End
+	GetExtents $layer, $lx,$ly, $ux,$uy, $$YES, $$YES
+	If $gCADmatic
+		Set $JobNumYesNo = $$NO
+	Else
+		GetYesNo "Would you like to move or edit the Job number Text block?", $JobNumYesNo
+	End
+	If $JobNumYesNo == $$YES
+		GetString "Enter the new text for the job number:", $text
+		SelectFilter
+			RemoveTypes 0
+		End
+		Erase
+			By		$$WINDOWMODE
+			Text	$$YES
+			Dcode	$dCode
+			Layer	$layer
+			Go	$lx,$ly, $ux,$uy
+		End
+		Text
+			Height    $Height
+			Width     $Width
+			Rotate    $Rot
+			Slant     0
+			Mirror    $mirrored
+			Font      "Stroke-Stencil"
+			LineSpace $LineSpace
+			CharSpace $CharSpace
+			Go	$text, $textOffsetX, $textOffsetY
+		End
+		Move
+			By 		$$ITEMMODE
+			Layer 	$layer
+			ToLayer $layer
+			Text  	$$YES
+			Go
+		End
+	End
+	# Return Text to unmirrored by default
+	Text
+		Mirror    $$NO
+	End
+	ActiveLayer $origActive
+ENDMACRO
+
+MACRO _AlignmentOptions
+	# Macro _AlignmentOptions Written by Robbie Devennie on 2024-10-04
+	StrWrite $log, "_AlignmentOptions Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Define form
+	Set $formId = -1
+	StrSet $formTitle, "Alignment Options"
+	Set $margin = 0.4
+	Set $controlId01 = -1
+	Set $controlId02 = -1
+	Set $controlId03 = -1
+	Set $controlId04 = -1
+	Set $addStandardPoints 	 = $$FALSE
+	Set $addCustomPoints 	 = $$FALSE
+	Set $skipAlignmentPoints = $$FALSE
+	DefineForm
+		FormId $formId
+		Title  $formTitle
+		Margin $margin
+		StaticText		$controlId01, 0.00, 0.00, 3.00, 0.50, "Select Alignment Option", $$FALSE
+		ButtonControl	$controlId02, 0.00, 0.50, 3.00, 0.50, "Add Standard Alignment Points", $addStandardPoints
+		ButtonControl	$controlId03, 0.00, 1.20, 3.00, 0.50, "Add Custom Alignment Points", $addCustomPoints
+		ButtonControl	$controlId04, 0.00, 1.90, 3.00, 0.50, "Skip Alignment Points", $skipAlignmentPoints
+	End
+	OpenForm $formId
+	# Set $1 to $$YES if points are to be added
+	If $addStandardPoints == $$TRUE
+		Set $1 = $$YES
+	End
+	If $addCustomPoints == $$TRUE
+		Set $1 = $$YES
+	End
+	If $skipAlignmentPoints == $$TRUE
+		Set $1 = $$NO
+	End
+	# If custom points are to be added Give ethe user the option to edit points
+	If $addCustomPoints == $$YES
+		GetDesignProperty "alignmentPoints", $alignmentPoints
+		# Parse Strings
+		StrRead $alignmentPoints, "%n,%n,%n,%n", $alignmentX1, $alignmentY1, $alignmentX2, $alignmentY2
+		# Create form
+		StrSet $formTitle, "Alignment Options"
+		Set $margin = 0.2
+		Set $formId = -1
+		Set $elemID01 = -1
+		Set $elemID02 = -1
+		Set $elemID03 = -1
+		Set $elemID04 = -1
+		Set $elemID05 = -1
+		Set $elemID06 = -1
+		Set $elemID07 = -1
+		Set $elemID08 = -1
+		Set $elemID09 = -1
+		Set $elemID10 = -1
+		Set $elemID11 = -1
+		Set $switchXY = $$FALSE
+		Set $accptBtn = $$FALSE
+		# Set $skipBtn  = $$FALSE
+		Set $closeForm = $$FALSE
+		Repeat $closeForm == $$FALSE
+			# Parse numbers to string variables
+			StrWrite $strAlignX1, "%n", $alignmentX1
+			StrWrite $strAlignX2, "%n", $alignmentX2
+			StrWrite $strAlignY1, "%n", $alignmentY1
+			StrWrite $strAlignY2, "%n", $alignmentY2
+			DefineForm
+				FormId $formId
+				Title  $formTitle
+				Margin $margin
+				StaticText    $elemID01, 1.4, 0.0, 1.0, 0.25, "X pos", $$FALSE
+				StaticText    $elemID02, 3.0, 0.0, 1.0, 0.25, "Y pos", $$FALSE
+				StaticText    $elemID03, 0.0, 0.3, 2.0, 0.25, "Alignment Point 1", $$FALSE
+				StaticText    $elemID04, 0.0, 0.6, 2.0, 0.25, "Alignment Point 2", $$FALSE
+				EditControl   $elemID05, 1.2, 0.3, 1.0, 0.25, $strAlignX1, $$FALSE
+				EditControl   $elemID06, 2.8, 0.3, 1.0, 0.25, $strAlignY1, $$FALSE
+				EditControl   $elemID07, 1.2, 0.6, 1.0, 0.25, $strAlignX2, $$FALSE
+				EditControl   $elemID08, 2.8, 0.6, 1.0, 0.25, $strAlignY2, $$FALSE
+				ButtonControl $elemID09, 2.3, 0.4, 0.4, 0.40, "<->", $switchXY
+				ButtonControl $elemID10, 2.0, 1.2, 1.7, 0.40, "Accept", $accptBtn
+				# ButtonControl $elemID11, 2.2, 1.2, 1.7, 0.40, "Skip", $skipBtn
+			End
+			OpenForm $formId
+			If $switchXY == $$TRUE
+				StrWrite $tempPoints, "%s,%s,%s,%s", $strAlignY1, $strAlignX1, $strAlignY2, $strAlignX2 # alternating X and Y
+				StrRead  $tempPoints, "%n,%n,%n,%n", $alignmentX1, $alignmentY1, $alignmentX2, $alignmentY2
+			End
+			If $accptBtn == $$TRUE
+				StrWrite $alignmentPoints, "%n,%n,%n,%n", $alignmentX1, $alignmentY1, $alignmentX2, $alignmentY2
+				PutDesignProperty "alignmentPoints", $alignmentPoints
+				# Set $addAlignmentPoints = $$YES
+				Set $closeForm = $$TRUE
+			End
+			# If $skipBtn == $$TRUE
+			# 	Set $addAlignmentPoints = $$NO
+			# 	Set $closeForm = $$TRUE
+			# End
+		End
+	End
+
+
+ENDMACRO
+
+MACRO _AutoLayerPick
+	# Macro _AutoLayerPick Written by Robbie Devennie on 2024-04-18
+	# Macro to find specific text within layer name. This is used to autoselect the layer in BRS_LayerPick.
+	# These locator strings will be utilised in further automation scripts.
+	# CALLMACRO _AutoLayerPick, $toLayer, $layerName # numvar, strvar
+	# StrWrite $log, "_AutoLayerPick Macro Called %s, $toLayer=%.0n, $layerName=%s", $$TIME, $1, $2
+	# LogMessage 0, $log
+	# | Layer | Name					| Suffix													|
+	# | ----- | ----------------------- | --------------------------------------------------------	|
+	# | 1     | Original Top Paste		|  gtp, spt, csp, cpt, tp, csmd, 1 							|
+	# | 2     | Top Silk				|  tsk, plc, idt, sst, css, lc, csk, to  					|
+	# | 3     | Top Copper				|  top, cmp, l1, l1comp, gtl, l1, cs, tl  					|
+	# | 4     | Top Soldermask			|  tsm, stc, mkt, smt, csm, gts, cm, ts  					|
+	# | 5     | Original Bottom Paste	|  gbp, spb, ssp, spt, ssmd, bp 							|
+	# | 6     | Bottom Silk				|  bsk, pls, idb, ssb, sss, gbo, ls, ssk, bo  				|
+	# | 7     | Bottom Copper			|  bot, gbo, sol, l8sold, gbl, l8, bl, bottom, 				|
+	# | 8     | Bottom Soldermask		|  bsm, sts, mkb, smb, ssm, gbs, sm, bs  					|
+	# | 9     | Border					|  bdr, brd, out, gko, bor, profile  						|
+	# | 10    | Drill Drawing			|  drl, dri, ddt											|
+	# | 11    | Top Fids				|  cft, ft, 5			  									|
+	# | 12    | Bottom Fids				|  cfb, fb				  									|
+	Set    $toLayer =  $1
+	StrSet $layerName, $2
+	#* 1  - "Original Top Paste"
+	StrLoc $layerName, ".1"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	StrLoc $layerName, ".gtp"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	StrLoc $layerName, ".spt"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	StrLoc $layerName, ".csp"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	StrLoc $layerName, ".csmd"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	StrLoc $layerName, ".cpt"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	StrLoc $layerName, ".tp"
+	If $$STATUS > 0
+		Set $toLayer = 1
+	End
+	#* 2  - "Top Silk"
+	StrLoc $layerName, ".tsk"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".plc"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".idt"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".sst"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".css"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".gto"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".lc"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	StrLoc $layerName, ".csk"
+	If $$STATUS > 0
+		Set $toLayer = 2
+	End
+	#* 3  - "Top Copper"
+	StrLoc $layerName, ".top"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".gto"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".cmp"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".l1"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".l1comp"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".gtl"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".l1"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	StrLoc $layerName, ".tl"
+	If $$STATUS > 0
+		Set $toLayer = 3
+	End
+	#* 4  - "Top Soldermask"
+	StrLoc $layerName, ".tsm"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	StrLoc $layerName, ".stc"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	StrLoc $layerName, ".mkt"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	StrLoc $layerName, ".smt"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	StrLoc $layerName, ".csm"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	StrLoc $layerName, ".gts"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	StrLoc $layerName, ".cm"
+	If $$STATUS > 0
+		Set $toLayer = 4
+	End
+	#* 5  - "Original Bottom Paste"
+	StrLoc $layerName, ".gbp"
+	If $$STATUS > 0
+		Set $toLayer = 5
+	End
+	StrLoc $layerName, ".spb"
+	If $$STATUS > 0
+		Set $toLayer = 5
+	End
+	StrLoc $layerName, ".ssp"
+	If $$STATUS > 0
+		Set $toLayer = 5
+	End
+	StrLoc $layerName, ".ssmd"
+	If $$STATUS > 0
+		Set $toLayer = 5
+	End
+	StrLoc $layerName, ".spt"
+	If $$STATUS > 0
+		Set $toLayer = 5
+	End
+	StrLoc $layerName, ".bp"
+	If $$STATUS > 0
+		Set $toLayer = 5
+	End
+	#* 6  - "Bottom Silk"
+	StrLoc $layerName, ".bsk"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".pls"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".idb"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".ssb"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".sss"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".gbo"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".ls"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	StrLoc $layerName, ".ssk"
+	If $$STATUS > 0
+		Set $toLayer = 6
+	End
+	#* 7  - "Bottom Copper"
+	StrLoc $layerName, ".bot"
+	If $$STATUS > 0
+		Set $toLayer = 7
+	End
+	StrLoc $layerName, ".gbo"
+	If $$STATUS > 0
+		Set $toLayer = 7
+	End
+	StrLoc $layerName, ".sol"
+	If $$STATUS > 0
+		Set $toLayer = 7
+	End
+	StrLoc $layerName, ".l8sold"
+	If $$STATUS > 0
+		Set $toLayer = 7
+	End
+	StrLoc $layerName, ".gbl"
+	If $$STATUS > 0
+		Set $toLayer = 7
+	End
+	StrLoc $layerName, ".l8"
+	If $$STATUS > 0
+		Set $toLayer = 7
+	End
+	#* 8  - "Bottom Soldermask"
+	StrLoc $layerName, ".bsm"
+	If $$STATUS > 0
+		Set $toLayer = 8
+	End
+	StrLoc $layerName, ".sts"
+	If $$STATUS > 0
+		Set $toLayer = 8
+	End
+	StrLoc $layerName, ".mkb"
+	If $$STATUS > 0
+		Set $toLayer = 8
+	End
+	StrLoc $layerName, ".smb"
+	If $$STATUS > 0
+		Set $toLayer = 8
+	End
+	StrLoc $layerName, ".ssm"
+	If $$STATUS > 0
+		Set $toLayer = 8
+	End
+	StrLoc $layerName, ".gbs"
+	If $$STATUS > 0
+		Set $toLayer = 8
+	End
+	#* 9  - "Border"
+	StrLoc $layerName, ".bdr"
+	If $$STATUS > 0
+		Set $toLayer = 9
+	End
+	StrLoc $layerName, ".brd"
+	If $$STATUS > 0
+		Set $toLayer = 9
+	End
+	StrLoc $layerName, ".out"
+	If $$STATUS > 0
+		Set $toLayer = 9
+	End
+	StrLoc $layerName, ".profile"
+	If $$STATUS > 0
+		Set $toLayer = 9
+	End
+	StrLoc $layerName, ".gko"
+	If $$STATUS > 0
+		Set $toLayer = 9
+	End
+	StrLoc $layerName, ".bor"
+	If $$STATUS > 0
+		Set $toLayer = 9
+	End
+	#* 10 - "Drill Drawing"
+	StrLoc $layerName, ".drl"
+	If $$STATUS > 0
+		Set $toLayer = 10
+	End
+	StrLoc $layerName, ".ddt"
+	If $$STATUS > 0
+		Set $toLayer = 10
+	End
+	StrLoc $layerName, ".dri"
+	If $$STATUS > 0
+		Set $toLayer = 10
+	End
+	#* 11 - "Top Fids"
+	StrLoc $layerName, ".ft"
+	If $$STATUS > 0
+		Set $toLayer = 11
+	End
+	StrLoc $layerName, ".cft"
+	If $$STATUS > 0
+		Set $toLayer = 11
+	End
+	StrLoc $layerName, ".5"
+	If $$STATUS > 0
+		Set $toLayer = 11
+	End
+	#* 12 - "Bottom Fids"
+	StrLoc $layerName, ".fb"
+	If $$STATUS > 0
+		Set $toLayer = 12
+	End
+	StrLoc $layerName, ".cfb"
+	If $$STATUS > 0
+		Set $toLayer = 12
+	End
+	Set $1 = $toLayer
+ENDMACRO
+
+MACRO _ClearLayer
+	# Macro _ClearLayer Written by Robbie Devennie on 2024-02-15
+	StrWrite $log, "_ClearLayer Macro Called %s", $$TIME
+	LogMessage 0, $log
+	#* $1 = Layer if not provided assume all visible.
+	#* $2 = Margin
+	If $$CALLDEPTH ==  0
+		Set $1 = $$ACTIVELAYER
+		Set $2 = 1
+	End
+	GetExtents $1, $lx,$ly, $ux,$uy, $$YES
+	StrWrite $log, "CallDepth == %.0n, Layer = %.0n, Margin = %.2n", $$CALLDEPTH, $1, $2
+	# Adding margin calc to extents
+	Calc $lx = $lx - $2
+	Calc $ly = $ly - $2
+	Calc $ux = $ux + $2
+	Calc $uy = $uy + $2
+	Erase
+		By           $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$YES
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		Dcode        0
+		Tool         0
+		Layer        $1
+		Go $lx,$ly, $ux,$uy
+	End
+ENDMACRO
+
+MACRO _CopyStringToClipboard
+	# Macro _CopyStringToClipboard Written by Robbie Devennie on 2024-10-10
+	StrWrite $log, "_CopyStringToClipboard Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	GetAppDataFolder $appDataPath
+	StrWrite  $bat, 	"%s\\macros\\ReferenceFiles\\CopyToClipboard.bat", $appDataPath
+	StrSet    $string, 	$1
+	StrWrite  $cmd, 	"powershell -command \"Set-Clipboard -Value '%s'\"", $string
+	SysCmd    $cmd
+ENDMACRO
+
+MACRO _FillFidAps
+	# Macro _FillFidAps Written by Robbie Devennie on 2024-04-19
+	StrWrite $log, "_FillFidAps Macro Called %s", $$TIME
+	LogMessage 0, $log
+	If $$CALLDEPTH == 0 # If macro is called by user
+		GetValue "Choose Layer for poly fill:", $layer
+	Else
+		Set $layer = $1
+	End
+	StrWrite $log, "Filling aps on Layer %.0n", $layer
+	LogMessage 0, $log
+	Set $fillDcode = 10
+	GetFreeDcode $fillDcode
+	GetDcodeInfo $fillDcode, $shape, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	Set $shape = $$ROUND
+	Set $xSize = 0.0007
+	Set $ySize = 0.0007
+	Set $type  = 0
+	PutDcodeInfo $fillDcode, $shape, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	GetTempLayer $tempLayer, $$LTOTHER
+	# clear selection group
+	GetFirstItem $layer, $seqNo, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	GetLayer $layer, $fn, $ln, $an, $vis, $fc, $dc, $type, $polarity, $key, $ft, $lx,$ly, $ux,$uy, $netid, $table
+	Repeat $$STATUS
+		GetDcodeInfo $dCode, $shape, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+		Set $fillAp = $$TRUE
+		If $shape == $$ROUND
+			Set $fillAp = $$FALSE
+		End
+		If $shape == $$SQUARE
+			Set $fillAp = $$FALSE
+			If $rotation != 0
+				Set $fillAp = $$TRUE
+			End
+		End
+		If $fillAp == $$TRUE
+			Move
+				By    $$WINDOWMODE
+				Boundary     $$YES
+				Flashes      $$YES
+				Draws        $$NO
+				Arcs         $$NO
+				Polys        $$NO
+				Text         $$NO
+				Dcode        $dCode
+				InPlace      $$YES
+				Layer        $layer
+				ToLayer      $tempLayer
+				Go $lx,$ly, $ux,$uy
+			End
+		End
+		GetNextItem
+	End
+	# Temp layer to polys on fid layer
+	Composite2Layer
+		CompositeLayer $tempLayer
+		ToLayer        $layer
+		Method         0
+		Go
+	End
+	# Fill aps
+	Raster2Vector
+	Layer       $layer
+	Outset      $$NO
+	FillPattern 1
+	BorderDcode $fillDcode
+	FillDcode   $fillDcode
+	FillStyle   0
+	Go
+End
+# Free Temp Layer
+FreeTempLayer $tempLayer
+ENDMACRO
+
+MACRO _FindMaxMin
+	# Macro _FindMaxMin Written by Robert Devennie on 2023-06-20
+	StrWrite $log, "_FindMaxMin Macro Called %s, Max/Min=%.0n, Variable initial value=%.0n, First Value=%.0n, Second Value=%.0n", $$TIME, $1, $2, $3, $4
+	LogMessage 0, $log
+	# Use function as CALLMACRO _FindMaxMin, $(Max/Min = 1/0), $VariableToReturn, $firstValue, $secondValue
+	# CALLMACRO _FindMaxMin, 1, $MyVariable, 20, 30 ----- Will set $MyVariable to 30
+	# CALLMACRO _FindMaxMin, 0, $MyVariable, 20, 30 ----- Will set $MyVariable to 20
+	If $3 == $4
+		Set $2 = $3
+	Else
+		If $1 == 1
+			If $3 > $4
+				Set $2 = $3
+			Else
+				Set $2 = $4
+			End
+		Else
+			If $3 < $4
+				Set $2 = $3
+			Else
+				Set $2 = $4
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _GetAllBorderExtents
+	StrWrite $log, "_GetAllBorderExtents Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Find extents of all border layers on a single design
+	# Returned value is StrWrite $allExtents, "%n %n %n %n", $minX, $minY, $maxX, $maxY
+	Set $minX = 0
+	Set $minY = 0
+	Set $maxX = 0
+	Set $maxY = 0
+	Set $counter = 0
+	Set $allMinX = 0
+	Set $allMinY = 0
+	Set $allMaxX = 0
+	Set $allMaxY = 0
+
+	StrSet $allExtents,   "string"
+	StrSet $layerExtents, "string"
+
+	Set $layerToStringber = 0
+	Set $repeat = $$YES
+	Repeat $repeat != $$NO
+		Calc $layerToStringber = $layerToStringber + 1
+		If $layerToStringber == $$MAXLAYERS
+			Set $repeat = $$NO
+			Set $layerToStringber = 0
+		End
+		GetLayer $layerToStringber,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+		If $type == $$LTBORDER
+			# StrWrite $layerExtents, "Layer %1.0n Extents\r\r lx = %n\r ly = %n\r ux = %n\r uy = %n", $layerToStringber, $lx,$ly,$ux,$uy
+			# MessageBox "Layer Extents", $layerExtents, 1
+			If $counter == 0
+				Set $minX = $lx
+				Set $minY = $ly
+				Set $maxX = $ux
+				Set $maxY = $uy
+			Else
+				CALLMACRO _FindMaxMin, 0, $allMinX, $minX, $lx
+				CALLMACRO _FindMaxMin, 0, $allMinY, $minY, $ly
+				CALLMACRO _FindMaxMin, 1, $allMaxX, $maxX, $ux
+				CALLMACRO _FindMaxMin, 1, $allMaxY, $maxY, $uy
+
+				Set $minX = $allMinX
+				Set $minY = $allMinY
+				Set $maxX = $allMaxX
+				Set $maxY = $allMaxY
+			End
+			Calc $counter = $counter + 1
+		End
+
+	End
+
+	StrWrite    $allExtents, "%n %n %n %n", $minX, $minY, $maxX, $maxY
+	StrSet      $1, $allExtents
+
+	StrWrite     	$log, "Border Extents = %s", $allExtents
+	LogMessage 	0, $log
+ENDMACRO
+
+MACRO _GetDefaultTextPosition
+	# Macro _GetDefaultTextPosition Written by Robbie Devennie on 2024-09-12
+	StrWrite $log, "_GetDefaultTextPosition Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	# Initialize variables
+	StrSet $line1, "alignmentPoints:9.3425,0,-9.3425,0"
+	StrSet $line2, "flowLogoOffset:0,-10.0"
+	StrSet $line3, "nsgLogoOffset:-8.5,9.0"
+	StrSet $line4, "pbLogoOffset:8.5,9.0"
+	StrSet $line5, "textOffset:-9.5,-9.5"
+
+	# Get the active frame
+	GetDesignProperty "Frame:", $activeFrame
+
+	# Construct the file path
+	StrWrite $filePath, "%s\\%s.defaults", $gFrames, $activeFrame
+
+	# Open the file
+	FileOpen $fid, $filePath, "r"
+	If $$STATUS == 0
+		StrWrite $log, "Failed to Open file: %s", $filePath
+		LogMessage 2, $log
+		Stop $log
+	End
+
+	# Read each line and assign to variables
+	FileRead $fid, "%s", $line1
+	FileRead $fid, "%s", $line2
+	FileRead $fid, "%s", $line3
+	FileRead $fid, "%s", $line4
+	FileRead $fid, "%s", $line5
+
+	# Close the file
+	FileClose $fid
+
+	StrRead $line1, "alignmentPoints:%s", $alignmentPoints
+	StrRead $line2, "flowLogoOffset:%s", $flowLogoOffset
+	StrRead $line3, "nsgLogoOffset:%s", $nsgLogoOffset
+	StrRead $line4, "pbLogoOffset:%s", $pbLogoOffset
+	StrRead $line5, "textOffset:%s", $textOffset
+
+	# Log the read values
+	StrWrite $log, "Read values: alignmentPoints=%s, textOffset=%s, pbLogoOffset=%s, flowLogoOffset=%s, nsgLogoOffset=%s", $alignmentPoints, $textOffset, $pbLogoOffset, $flowLogoOffset, $nsgLogoOffset
+	LogMessage 0, $log
+
+	# Set the design properties
+	PutDesignProperty "alignmentPoints", $alignmentPoints
+	PutDesignProperty "flowLogoOffset", $flowLogoOffset
+	PutDesignProperty "nsgLogoOffset", $nsgLogoOffset
+	PutDesignProperty "pbLogoOffset", $pbLogoOffset
+	PutDesignProperty "textOffset", $textOffset
+
+	# Parse textOffset into X and Y components
+	# StrRead $textOffset, "%n,%n", $textOffsetX, $textOffsetY
+	# If $$CALLDEPTH > 0
+	# 	Set $1 = $textOffsetX
+	# 	Set $2 = $textOffsetY
+	# End
+ENDMACRO
+
+MACRO _GetISODate
+	# Macro _GetISODate Written by Robbie Devennie on 2023-03-15
+	# StrWrite $log, "_GetISODate Macro Called %s", $$TIME
+	# LogMessage 0, $log
+	# This macros has proven to be unreliable so it does not require logging.
+	# This macro should be called by another macro. In order to run properly you must run the following two lines:
+
+	# Create Variables to hold date
+	StrSet $MM, ""
+	StrSet $DD, ""
+	StrSet $YY, ""
+
+	#StrRead source, format, output_variables
+	StrRead  $$DATENUMERIC, "%2s-%2s-%4s", $MM, $DD, $YY
+	StrWrite $1, 			"%s-%s-%s"	 , $YY, $MM, $DD
+ENDMACRO
+
+MACRO _GetPrinterChoice
+	# Macro _GetPrinterChoice Written by Robbie Devennie on 2024-04-16
+	StrWrite $log, "_GetPrinterChoice Macro Called %s, Preferred Printer = %s", $$TIME, $1
+	LogMessage 0, $log
+
+	StrSet $printer, $1
+	Set    $usePreffered = $$FALSE
+	EnumeratePrinters
+	Set $printerCount = $$STATUS
+	if $printerCount > 0
+		StrArray $printerArray($printerCount)
+		EnumeratePrinters $printerArray
+		Calc $index = 1
+		Repeat $index <= $printerCount
+			StrCmp $1, $printerArray($index)
+			If $$STATUS == 0
+				LogMessage 1, $printerArray($index)
+				Set $usePreffered = $$TRUE
+			End
+			Calc $index = $index + 1
+		End
+		If $usePreffered == $$FALSE
+			GetListChoice "Pick Size Plot Printer", $printer, $printerArray
+		End
+	End
+	StrWrite $log, "Chosen Printer = %s", $printer
+	LogMessage 0, $log
+	StrSet $1, $printer
+ENDMACRO
+
+MACRO _RAD_AddEvenBorder
+	# Macro RAD_AddEvenBorder Written by Robbie Devennie on 2024-01-23
+	StrWrite $log, "_RAD_AddEvenBorder Macro Called %s", $$TIME
+	LogMessage 0, $log
+	#* $1 = Layer if not provided assume all visible.
+	#* $2 = Margin
+	If $$CALLDEPTH ==  0
+		Set $1 = $$ACTIVELAYER
+		Set $2 = 0.5
+	End
+	ActiveLayer $1
+	StrWrite $log, "CallDepth = %.0n, Layer = %.0n, Margin = %.2n", $$CALLDEPTH, $1, $2
+	LogMessage 0, $log
+
+	Set $dCode = -1
+	GetFreeDcode $dCode
+	GetDcodeInfo $dCode, $shape,  $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	Set $xSize = 0.001
+	Set $ySize = 0.001
+	PutDcodeInfo $dCode, $$ROUND, $custom, $xSize, $ySize, $type, $used, $flags, $rotation, $scratch
+	GetExtents $1, $lx,$ly, $ux,$uy, $$YES
+
+	Set $absX  = 0
+	Set $absY  = 0
+	Set $absLx = 0
+	Set $absLy = 0
+	Set $absUx = 0
+	Set $absUy = 0
+
+	# Get absolute value of upper and lower X and Y
+	Abs $absLx = $lx
+	Abs $absLy = $ly
+	Abs $absUx = $ux
+	Abs $absUy = $uy
+
+	# Find max value of absolute +/- extents
+	CALLMACRO _FindMaxMin, 1, $absX, $absLx, $absUx
+	CALLMACRO _FindMaxMin, 1, $absY, $absLy, $absUy
+	# Setting absolute extentds
+	Calc $lx = $absX * -1
+	Calc $ly = $absY * -1
+	Calc $ux = $absX *  1
+	Calc $uy = $absY *  1
+	# Adding margin calc to extents
+	Calc $lx = $lx - $2
+	Calc $ly = $ly - $2
+	Calc $ux = $ux + $2
+	Calc $uy = $uy + $2
+
+	AddDraw $lx,$ly, $lx,$uy, $ux,$uy, $ux,$ly, $lx,$ly
+ENDMACRO
+
+MACRO _RAD_GiveAnF
+	# Macro _RAD_GiveAnF Written by Robbie Devennie on 2024-04-23
+	StrWrite $log, "_RAD_GiveAnF Macro Called %s", $$TIME
+	LogMessage 0, $log
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+	Set $origActive = $$ACTIVELAYER
+	If $$CALLDEPTH == 0 # If macro is called by user
+		GetValue "Enter fiducial layer:", $engraveLayer
+		GetValue "Enter alignment layer:", $alignmentLayer
+		GetValue "Enter Red line layer:", $redlineLayer
+	Else
+		Set $engraveLayer   = $1
+		Set $alignmentLayer = $2
+		Set $redlineLayer   = $3
+	End
+	ActiveLayer $redlineLayer
+	Set $redLineDcode = 10
+	GetFreeDcode $redLineDcode
+	StrSet $fWord, "F"
+	StrSet $aWord, "A"
+	# Create Test Format
+	Text
+		Height    0.25
+		Width     0.15
+		Rotate    0
+		Slant     0
+		Mirror    $$NO
+		Font      "Tahoma"
+		LineSpace 1
+		CharSpace 1
+	End
+	# Get First item on engrave layer
+	GetFirstItem $engraveLayer, $seqNo, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	Repeat $$STATUS
+		# Cycle through engrave layers until all are checked.
+		If $type == $$DBFLASH
+			# If item is a flash then add an F word
+			# Redline info is added to the Active layer.
+			Redline
+				Mode   0
+				Dcode  $redLineDcode
+				Color  "firebrick1"
+				Go $fWord, $x,$y
+			End
+		End
+		GetNextItem
+	End
+	# Get First item on alignment layer
+	If $alignmentLayer > 0
+		GetFirstItem $alignmentLayer, $seqNo, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		Repeat $$STATUS
+			# Cycle through alignment layers until all are checked.
+			If $type == $$DBFLASH
+				# If item is a flash then add an A word
+				# Redline info is added to the Active layer.
+				Redline
+					Mode   0
+					Dcode  $redLineDcode
+					Color  "firebrick1"
+					Go $aWord, $x,$y
+				End
+			End
+			GetNextItem
+		End
+	End
+	ActiveLayer $origActive
+ENDMACRO
+
+MACRO _RemoveFlashesFromLayer
+	# Macro _RemoveFlashesFromLayer Written by Robbie Devennie on 2024-04-19
+	StrWrite $log, "_RemoveFlashesFromLayer Macro Called %s", $$TIME
+	LogMessage 0, $log
+	If $$CALLDEPTH == 0 # If macro is called by user
+		GetValue "Choose Layer to remove Flashes from:", $layer
+	Else
+		Set $layer = $1
+	End
+	StrWrite $log, "Removing Flashes from Layer %.0n", $layer
+	LogMessage 0, $log
+	# clear selection group
+	GetLayer $layer, $fn, $ln, $an, $vis, $fc, $dc, $type, $polarity, $key, $ft, $lx,$ly, $ux,$uy, $netid, $table
+	Erase
+		By           1
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$NO
+		Arcs         $$NO
+		Polys        $$NO
+		Text         $$NO
+		Drills       $$NO
+		Slots        $$NO
+		DrillCircles $$NO
+		DrillText    $$NO
+		MillPaths    $$NO
+		MillCircles  $$NO
+		Dcode        0
+		Layer        $layer
+		Go 	$lx,$ly, $ux,$uy
+	End
+ENDMACRO
+
+MACRO _RemovePasteCorners
+	# Macro _RemovePasteCorners Written by Robbie Devennie on 2024-05-02
+	StrWrite $log, "_RemovePasteCorners Macro Called %s", $$TIME
+	LogMessage 0, $log
+	Set $layer = $1
+	GetExtents $layer, $lx,$ly, $ux,$uy, $$TRUE, $$TRUE
+	Erase
+		By           $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$NO
+		Draws        $$YES
+		Arcs         $$NO
+		Polys        $$NO
+		Text         $$NO
+		Drills       $$NO
+		Slots        $$NO
+		DrillCircles $$NO
+		DrillText    $$NO
+		MillPaths    $$NO
+		MillCircles  $$NO
+		Dcode        0
+		Tool         0
+		Layer        $layer
+		Go $lx,$ly, $ux,$uy
+	End
+ENDMACRO
+
+MACRO _ReplaceIllegalChars
+	# Macro _ReplaceIllegalChars Written by GPT-4o on 2024-10-10
+	StrWrite $log, "_ReplaceIllegalChars Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	# Get the input string
+	If $$CALLDEPTH == 0
+		GetString "Enter the string to check:", $inputString
+	Else
+		StrSet $inputString, $1
+	End
+
+	# Initialize the output string
+	StrSet $outputString, $inputString
+
+	# Loop through each character in the input string
+	Set $numIllegalChars = 1
+	Repeat $numIllegalChars > 0
+		StrSet $illegalChars, ""
+		Set $numIllegalChars = 0
+		StrLoc $outputString, "/"
+		If $$STATUS > 0
+			StrCat $illegalChars, "/"
+			StrRep $outputString, "/", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, "<"
+		If $$STATUS > 0
+			StrCat $illegalChars, "<"
+			StrRep $outputString, "<", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, ">"
+		If $$STATUS > 0
+			StrCat $illegalChars, ">"
+			StrRep $outputString, ">", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, ":"
+		If $$STATUS > 0
+			StrCat $illegalChars, ":"
+			StrRep $outputString, ":", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, "\""
+		If $$STATUS > 0
+			StrCat $illegalChars, "\""
+			StrRep $outputString, "\"", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, "\\"
+		If $$STATUS > 0
+			StrCat $illegalChars, "\\"
+			# StrRep $outputString, "\\", "|"
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, "|"
+		If $$STATUS > 0
+			StrCat $illegalChars, "|"
+			StrRep $outputString, "|", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, "?"
+		If $$STATUS > 0
+			StrCat $illegalChars, "?"
+			StrRep $outputString, "?", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		StrLoc $outputString, "*"
+		If $$STATUS > 0
+			StrCat $illegalChars, "*"
+			StrRep $outputString, "*", ""
+			Set $numIllegalChars = $numIllegalChars + 1
+		End
+		If $numIllegalChars > 0
+			StrWrite $message, "Illegal characters found in the string: %s Confirm New string:", $inputString
+			GetString $message, $outputString
+		End
+	End
+
+	# Output the result
+	StrWrite $log, "Original String: %s", $inputString
+	LogMessage 0, $log
+	StrWrite $log, "Modified String: %s", $outputString
+	LogMessage 0, $log
+
+	If $$CALLDEPTH > 0
+		StrSet $1, $outputString
+	End
+ENDMACRO
+
+MACRO _RoundToNextHighest
+	# Macro _RoundToNextHighest Written by Robbie Devennie on 2024-09-12
+	# This macro rounds the initial number to the NextHighest secondary number.
+	StrWrite $log, "_RoundToNextHighest Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	if $$CALLDEPTH == 0
+		GetValue "Enter number to round:", $number
+		GetValue "Enter rounding factor:", $roundFactor
+	Else
+		Set $number = $1
+		Set $roundFactor = $2
+	End
+
+	Calc $number = $number / $roundFactor
+	Ceil $number = $number
+	Calc $number = $number * $roundFactor
+
+	StrWrite $log, "Rounded number = %.2n", $number
+	LogMessage 0, $log
+	if $$CALLDEPTH == 0
+		MessageBox "Rounded number", $log, 0, $$YES
+	End
+ENDMACRO
+
+MACRO _SizePlotText
+	StrWrite $log, "_SizePlotText Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# This macro was designed to assist in the automatic markup of smt pad shapes for stencil design communication purposes.
+	Set $rpt = $$YES
+	If $$CALLDEPTH == 0
+		StrSet $footer, "Footer"
+		GetValue "Layer to mark up?", $layer
+	Else
+		StrSet $footer, $gFrame
+		Set $layer 	  = $1
+	End
+	GetLayer $layer, $fn, $ln, $an, $vis, $fc, $dc, $type, $polarity, $key, $ft, $lx,$ly, $ux,$uy, $netid, $table
+	StrSet $header, $ln
+	If $layer == $gSizePlotT
+		StrSet $header, $gJobNumT
+	End
+	If $layer == $gSizePlotB
+		StrSet $header, $gJobNumB
+	End
+	StrLen $header
+	Set $headLen = $$STATUS
+	StrLen $footer
+	Set $footLen = $$STATUS
+	Set $rldcode  = 10
+	ActiveLayer $layer
+	# Set Smallest new Dcodes
+	GetFirstItem $layer, $seqno, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	Set $dcode1 = $dCode
+	Set $dcode2 = $dCode
+	Set $dcode3 = $dCode
+	Set $dcode4 = $dCode
+	# Creating redline Dcode
+	GetFreeDcode $rldcode
+	GetDcodeInfo $rldcode, $shp, $cus, $x,$y, $typ, $used, $flags, $scr
+	Set $shp    = $$ROUND
+	Set $xSize  = .005
+	Set $ySize  = .005
+	Set $height = .25
+	Set $width  = .15
+	Set $typ    = 0
+	Set $ldcode = 0
+	PutDcodeInfo $rldcode, $shp, $cus, $xSize, $ySize, $typ, $used, $flags, $scr
+	CurrentDcode $rldcode
+	GetExtents $layer, $lx,$ly, $ux,$uy
+	# StrWrite $log, "$lx=%.0n, $ly=%.0n, $ux=%.0n, $uy=%.0n", $lx,$ly, $ux,$uy
+	# LogMessage 0, $log
+	Set $lowerX = $lx
+	Set $lowerY = $ly
+	Set $upperX = $ux
+	Set $upperY = $uy
+	Set $qnum = 1
+	Set $rpt  = $$TRUE
+	Text
+		Height		$height
+		Width		$width
+		Rotate		0
+		Slant		0
+		Mirror		$$NO
+		Font		"Tahoma"
+		LineSpace	1
+		CharSpace	1
+	End
+	Repeat $qnum <= 4
+		# StrWrite $log, "Quadrant = %.0n", $qnum
+		# LogMessage 0, $log
+		Set $smallestArea 	= 10000000
+		Set $smallestDcode 	= 1
+		Set $smallestSeqno 	= 1
+		CALLMACRO _GetQuadrant, $layer, $qnum, $lx,$ly, $ux,$uy
+		GetFirstItem $layer, $seqno, $net, $dCode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		Set $smallestDcode = $dCode
+		Set $smallestSeqno = $seqno
+		Set $xLoc = $x
+		Set $yLoc = $y
+		Repeat $$STATUS
+			If $type == $$DBFLASH
+				If $dCode != $dcode1
+					If $dCode != $dcode2
+						If $dCode != $dcode3
+							If $dCode != $dcode4
+								RunUid 1001, $dCode, $area
+								If $area < $smallestArea
+									Set $smallestArea  = $area
+									Set $smallestDcode = $dCode
+									Set $smallestSeqno = $seqno
+									Set $xLoc = $x
+									Set $yLoc = $y
+								End
+							End
+						End
+					End
+				End
+			End
+			GetNextItem
+		End
+		# StrWrite $log, "$layer=%n, $smallestSeqno=%n, $qnum=%n, $smallestDcode=%n, $xLoc=%n, $yLoc=%n", $layer, $smallestSeqno, $qnum, $smallestDcode, $xLoc, $yLoc
+		# LogMessage 0, $log
+		# Calc and add redline Text and box
+		GetDcodeInfo $smallestDcode, $shp, $custom, $xs,$ys, $type, $usedCount, $flags, $rot, $scratch
+		If $ldcode != $smallestDcode
+			Set $ldcode = $smallestDcode
+			Set $x1 = $xLoc
+			Set $y1 = $yLoc
+			# Convert to mils
+			If $rot == 90
+				Calc $milxs = $ys * 1000
+				Calc $milys = $xs * 1000
+			Else
+				Calc $milxs = $xs * 1000
+				Calc $milys = $ys * 1000
+			End
+			If $shp == $$ROUND
+				StrWrite $textString, "%3.1n %s", $milxs, "dia."
+				# StrWrite $textString, "Q%.0n: %3.1n %s", $qnum, $milxs, "dia."
+			Else
+				StrWrite $textString, "%3.1n x %3.1n", $milxs, $milys
+				# StrWrite $textString, "Q%.0n: %3.1n x %3.1n", $qnum, $milxs, $milys
+			End
+			StrLen $textString
+			Set $strLen = $$STATUS
+			If $qnum == 1
+				Set $dcode1 = $smallestDcode
+				Calc $buffer = $strLen * 0.15
+				Calc $buffer = $buffer + 0.15
+				Set $textX = $lowerX - $buffer
+				Set $textY = $lowerY - 0.1
+			End
+			If $qnum == 2
+				Set $dcode2 = $smallestDcode
+				Calc $xpos = $ux + $lx
+				Calc $xpos = $xpos/2
+				Set $textX = $xpos
+				Set $textY = $lowerY - 0.1
+			End
+			If $qnum == 3
+				Set $dcode3 = $smallestDcode
+				Calc $buffer = $strLen * 0.15
+				Calc $buffer = $buffer + 0.15
+				Set $textX = $lowerX - $buffer
+				Set $textY = $upperY + 1
+			End
+			If $qnum == 4
+				Set $dcode4 = $smallestDcode
+				Calc $xpos = $ux + $lx
+				Calc $xpos = $xpos/2
+				Set $textX = $xpos
+				Set $textY = $upperY + 1
+			End
+			Redline
+				Dcode 	$rldcode
+				Mode	2
+				Color	"firebrick1"
+				Go $textString, $x1, $y1, $textX, $textY
+			End
+		End
+		FreeTempLayer $layer # Todo: Check If this works
+		Calc $qnum = $qnum + 1
+		# FreeTemplayer $layer
+		If $$CALLDEPTH > 0
+			Set $layer = $1
+		End
+	End
+	Calc $headBuffer = $headLen * -0.075 # multiple By negative half the character Width to space centrally
+	Calc $footBuffer = $footLen * -0.075 # multiple By negative half the character Width to space centrally
+	Redline
+		Dcode 	$rldcode
+		Mode	0
+		Color	"firebrick1"
+		Go $header, $headBuffer, $upperY + 1.5
+		Go $footer, $footBuffer, $lowerY - 1.0
+	End
+ENDMACRO

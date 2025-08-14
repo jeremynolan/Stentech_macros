@@ -1,0 +1,4750 @@
+MACRO AddFoil
+    StrWrite $log, "AddFoil Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set       $dcode = 10
+	# GetFreeDcode $dcode
+	GetFreeDcode $dcode
+	GetDcodeInfo $dcode, $shp,  $cus, $x,$y, $typ, $used, $flags, $scr
+	Set $shp   = $$ROUND
+	Set $xSize = .0001
+	Set $ySize = .0001
+	Set $typ   = 0
+	PutDcodeInfo $dcode, $shp, $cus, $xSize, $ySize, $typ, $used, $flags, $scr
+	CurrentDcode $dcode
+	ShowPrompt   $$NO
+	CALLMACRO CPVis
+	IsEmptyLayer $gBorderT
+	If $$STATUS == $$FALSE
+		Set $useBorderSize = $$TRUE
+		GetExtents $gBorderT, $lx, $ly, $ux, $uy, $$FALSE, $$FALSE
+		Calc $foilX = $ux - $lx
+		Calc $foilY = $uy - $ly
+	Else
+		Set $useBorderSize = $$FALSE
+		Set  $foilX = 2
+		Set  $foilY = 2
+	End
+	Set  $tabsX = 1
+	Set  $tabsY = 1
+	Set  $dimX  = 2
+	Set  $dimY  = 2
+	Set  $rad   = .1
+	GetValue  "Please enter the Foil size in the X dimension: (Inches)", $foilX
+	If $useBorderSize == $$TRUE
+		# Variable set to use border size
+	Else
+		# Variable set to use user input as most likely square
+		Set $foilY = $foilX
+	End
+	GetValue  "Please enter the Foil size in the Y dimension: (Inches)", $foilY
+	Calc $hX = $foilX / 2
+	Calc $hY = $foilY / 2
+	Calc $lx = 0 - $hX
+	Calc $ly = 0 - $hY
+	Calc $ux = 0 + $hX
+	Calc $uy = 0 + $hY
+	ActiveLayer $gCheckPlotT
+	GetValue "Please enter the corner radius: (Inches)", $rad
+	AddRectRounded $rad, $lx,$ly, $ux,$uy
+	If $foilX > 2 # Todo: Add option if foil is under 2"
+		If $foilY > 2
+			GetListChoice "Choose Foil Perimeter Type:", $type, "Solid Outline", "Corner Marks Only", "Tabs"
+			StrCmp $type, "Solid Outline"
+			If $$STATUS == 0
+			Else
+				StrCmp $type, "Tabs"
+				If $$STATUS == 0
+					CALLMACRO _MakeFoilTabs, $foilX, $foilY
+				End
+				StrCmp $type, "Corner Marks Only"
+				If $$STATUS == 0
+					# Do Horizontal Clip
+					Calc $cliplx = $lx - .0075
+					Calc $clipux = $ux + .0075
+					Calc $cliply = $ly + .5
+					Calc $clipuy = $uy - .5
+					Clip
+						By $$WINDOWMODE
+						Boundary $$YES
+						Flashes  $$NO
+						Draws    $$YES
+						Polys    $$YES
+						Layer    $gCheckPlotT
+						Go $cliplx,$cliply ,$clipux,$clipuy
+					End
+					# Do Vertical Clip
+					Calc $cliplx = $lx + .5
+					Calc $clipux = $ux - .5
+					Calc $cliply = $ly - .0075
+					Calc $clipuy = $uy + .0075
+					Clip
+						By $$WINDOWMODE
+						Boundary $$YES
+						Flashes $$NO
+						Draws $$YES
+						Polys $$YES
+						Layer $gCheckPlotT
+						Go $cliplx,$cliply ,$clipux,$clipuy
+					End
+				End
+			End
+		End
+	End
+	ShowPrompt $$YES
+ENDMACRO
+
+MACRO AllOff
+    StrWrite $log, "AllOff Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $index = 1
+	Repeat $index <= $$MAXLAYERS
+		IsEmptyLayer $index
+		If $$STATUS == $$FALSE
+			Layern $index
+				Visibility 0
+			End
+		End
+		Calc $index = $index + 1
+	End
+	Redraw
+ENDMACRO
+
+MACRO AllVisible
+    StrWrite $log, "AllVisible Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $index = 1
+	Repeat $index <= $$MAXLAYERS
+		IsEmptyLayer $index
+		If $$STATUS == $$FALSE
+			Layern $index
+				Visibility 1
+			End
+		End
+		Calc $index = $index + 1
+	End
+	Redraw
+ENDMACRO
+
+MACRO CPLayerVis
+    StrWrite $log, "CPLayerVis Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $index = 1
+	Repeat $index <= $$MAXLAYERS
+		Layern $index
+			Visibility 0
+		End
+		Calc $index = $index + 1
+	End
+	Layern $gCheckPlotT
+		LyrName $1
+		Visibility 1
+	End
+	Layern $gCheckPlotB
+		LyrName $2
+		Visibility 1
+	End
+	Layern $gCutT
+		LyrName "Laser Cut Top"
+		Visibility 0
+	End
+	Layern $gCutB
+		LyrName "Laser Cut Bot"
+		Visibility 0
+	End
+ENDMACRO
+
+MACRO CPVis
+    StrWrite $log, "CPVis Macro Called %s", $$TIME
+    LogMessage 0, $log
+	CALLMACRO AllOff
+	Layern $gCheckPlotT
+		Visibility 1
+	End
+	Layern $gCheckPlotB
+		Visibility 1
+	End
+	ViewAll
+ENDMACRO
+
+MACRO CreateLayerSets
+    StrWrite $log, "CreateLayerSets Macro Called %s", $$TIME
+    LogMessage 0, $log
+	LayerSets
+		# Add new View/Edit layer set
+		Create 0
+			Name "Top"
+			Layer $gSilkT
+			Layer $gOrigPasteT
+			Layer $gModPasteT
+			Layer $gBorderT
+			Layer $gFidT
+			Layer $gNCDrill
+		End
+		# Add new View/Edit layer set
+		Create 0
+			Name "Bot"
+			Layer $gSilkB
+			Layer $gOrigPasteB
+			Layer $gModPasteB
+			Layer $gBorderB
+			Layer $gFidB
+			Layer $gNCDrillB
+		End
+	End
+ENDMACRO
+
+MACRO DeleteCPLayers
+    StrWrite $log, "DeleteCPLayers Macro Called %s", $$TIME
+    LogMessage 0, $log
+	DeleteLayer $gCheckPlotT #* 10
+	DeleteLayer $gCheckPlotB #* 11
+	DeleteLayer $gCutT       #* 12
+	DeleteLayer $gCutB       #* 13
+	DeleteLayer $gEngraveT   #* 14
+	DeleteLayer $gEngraveB   #* 15
+	DeleteLayer $gTxtT       #* 18
+	DeleteLayer $gTxtB       #* 19
+	DeleteLayer $gTxtOut20T  #* 25
+	DeleteLayer $gTxtOut20B  #* 26
+	DeleteLayer $gSizePlotT  #* 27
+	DeleteLayer $gSizePlotB  #* 28
+	DeleteLayer $gLMDT       #* 29
+	DeleteLayer $gLMDB       #* 30
+	DeleteLayer $gAlignT     #* 35
+	DeleteLayer $gAlignB     #* 36
+ENDMACRO
+
+MACRO ExportCutFidOrig
+    StrWrite $log, "ExportCutFidOrig Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# Copy Cuts and Fids
+	CALLMACRO _SetgPasteLayersO
+	If $gPasteLayers == 1
+		Set $index = 1
+		Repeat $index <= $$MAXLAYERS
+			If $index == 40
+				Layern $index
+					Visibility 1
+				End
+			Else
+				Layern $index
+					Visibility 0
+				End
+			End
+			Calc $index = $index + 1
+		End
+		CopyLayer $gCutT, 40
+		CopyLayer $gFidT, 40
+	End
+	If $gPasteLayers == 2
+		Set $index = 1
+		Repeat $index <= $$MAXLAYERS
+			If $index == 41
+				Layern $index
+					Visibility 1
+				End
+			Else
+				Layern $index
+					Visibility 0
+				End
+			End
+			Calc $index = $index + 1
+		End
+		CopyLayer $gCutB, 41
+		CopyLayer $gFidB, 41
+	End
+	If $gPasteLayers == 3
+		Set $index = 40
+		Repeat $index <= $$MAXLAYERS
+			If $index == 40
+				Layern $index
+					Visibility 1
+				End
+			Else
+				If $index == 41
+					Layern $index
+						Visibility 1
+					End
+				Else
+					Layern $index
+						Visibility 0
+					End
+				End
+			End
+			Calc $index = $index + 1
+		End
+		CopyLayer $gCutT, 40
+		CopyLayer $gFidT, 40
+		CopyLayer $gCutB, 41
+		CopyLayer $gFidB, 41
+	End
+	GetDesignProperty "ctrX:", $ctrXSTR, 1
+	GetDesignProperty "ctrY:", $ctrYSTR, 1
+	StrRead $ctrXSTR, "%n", $ctrX
+	StrRead $ctrYSTR, "%n", $ctrY
+	GetExtents 0, $lx,$ly, $ux,$uy
+	# ViewTempCuts&Fids
+	If $gCADmatic
+		# not needed for CADmatic users
+	Else
+		Redraw
+	End
+	Move
+		By 	  $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$YES
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		Layer        0
+		Go $lx,$ly, $ux,$uy, 0,0, $ctrX,$ctrY
+	End
+	# Export Gerber(s)
+	SplitPath $$DSNNAME, $gDir, $gJobNumT, $2
+	If $gPasteLayers == 1
+		StrWrite $mpt, "%s\\%s_ModifiedPasteTop.gbr", 	 $gDir, $gJobNumT
+		ExportGerber
+			OutFile $mpt, 40
+		End
+	End
+	If $gPasteLayers == 2
+		StrWrite $mpb, "%s\\%s_ModifiedPasteBottom.gbr", $gDir, $gJobNumB
+		ExportGerber
+			OutFile $mpb, 41
+		End
+	End
+	If $gPasteLayers == 3
+		StrWrite $mpt, "%s\\%s_ModifiedPasteTop.gbr", 	 $gDir, $gJobNumT
+		StrWrite $mpb, "%s\\%s_ModifiedPasteBottom.gbr", $gDir, $gJobNumB
+		ExportGerber
+			OutFile $mpt, 40
+			OutFile $mpb, 41
+		End
+	End
+	LogMessage 0, "Special Export Complete. Modified Paste files have been exported to the job directory."
+	Messagebox "Special Export Complete", "Your Modified Paste files have been exported to the job directory.", 0
+ENDMACRO
+
+MACRO ID_Fiducials
+    StrWrite $log, "ID_Fiducials Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# Turn Off all layers
+	Set $index  = 1
+	Set $NoTop  = 0
+	Set $NoBot  = 0
+	Set $NoFidT = 0
+	Set $NoFidB = 0
+	Set $yesNo  = $$YES
+
+	IsEmptyLayer $gOrigPasteT
+	Set $NoTop = $$STATUS
+	If $NoTop == 0
+		IsEmptyLayer $gFidT
+		Set $NoFidT = $$STATUS
+		Repeat $index <= $$MAXLAYERS
+			Layern $index
+				Visibility 0
+			End
+			Calc $index = $index + 1
+		End
+		# Select Top Fiducials and move to FIDT layer
+		Layern $gCopperT
+			Visibility 1
+		End
+		Layern $gOrigPasteT
+			Visibility 1
+		End
+		Layern $gBorderT
+			Visibility 1
+		End
+		SelectGroup
+			Mode	0
+			Go
+		End
+		If $gCADmatic
+			Set $yesNo = $$NO
+		Else
+			ViewAll
+			GetYesNo "Would you like to select fiducials on the Top Layer?", $yesNo
+		End
+		If $yesNo == $$NO
+			If $gCADmatic
+				# Do nothing
+			Else
+				StrWrite $message, "Manually add fiducials to the Top Fiducials layer (%.0n) prior to running the Check Plot macro.", $gFidT
+				MessageBox "Stentech Process", $message, 0
+			End
+		Else
+			GetPoint "Select first fiducial", $x,$y
+			CALLMACRO SelectAll, $x,$y
+			If $$SELGRPCNT >= 1
+				GetYesNo "Are all the fiducial pads selected?", $yesNo
+				If $yesNo == $$NO
+					# Select Fid
+					GetYesNo "Keep all these fiducials and add more? (Choose no to manually select all fiducials)", $yesNo
+					If $yesNo == $$NO
+						SelectGroup
+							Mode	0
+							Go
+						End
+						If $gCADmatic
+							# not needed for CADmatic users
+						Else
+							Redraw
+						End
+						SelectGroup
+							Mode         1
+							By           $$ITEMMODE
+							Flashes      $$YES
+							Draws        $$NO
+							Arcs         $$NO
+							Polys        $$NO
+							Text         $$NO
+							Drills       $$NO
+							Slots        $$NO
+							DrillCircles $$NO
+							DrillText    $$NO
+							MillPaths    $$NO
+							MillCircles  $$NO
+							Layer        0
+							Dcode        0  # Move all D-codes
+							Tool         0  # Move all tools
+							Polarity     0
+							Go $x,$y
+						End
+						GetYesNo "Is there a another fiducial?", $yesNo
+					End
+					Repeat $yesNo == $$YES
+						If $yesNo == $$YES
+							GetPoint "Select Next Fiducial", $x,$y
+							SelectGroup
+								Mode         1
+								By           $$ITEMMODE
+								Flashes      $$YES
+								Draws        $$NO
+								Arcs         $$NO
+								Polys        $$NO
+								Text         $$NO
+								Drills       $$NO
+								Slots        $$NO
+								DrillCircles $$NO
+								DrillText    $$NO
+								MillPaths    $$NO
+								MillCircles  $$NO
+								Layer        0
+								Dcode        0  # Move all D-codes
+								Tool         0  # Move all tools
+								Polarity     0
+								Go $x,$y
+							End
+						End
+						GetYesNo "Is there a another fiducial?", $yesNo
+					End
+				End
+			End
+			Copy
+				By $$GROUPMODE
+				Layer 	0
+				ToLayer $gFidT
+				Go 0,0, 0,0
+			End
+			# Turn Off all layers
+			Set $index = 1
+			Repeat $index <= $$MAXLAYERS
+				Layern $index
+					Visibility 0
+				End
+				Calc $index = $index + 1
+			End
+			SelectGroup
+				Mode	0
+				Go
+			End
+		End
+		IsEmptyLayer $gOrigPasteB
+		If $$STATUS == 0
+			# Select Bottom Fiducials and move to gFidB layer
+			Layern $gCopperB
+				Visibility 1
+			End
+			Layern $gOrigPasteB
+				Visibility 1
+			End
+			Layern $gBorderB
+				Visibility 1
+			End
+			SelectGroup
+				Mode	0
+				Go
+			End
+			If $gCADmatic
+				Set $yesNo = $$NO
+			Else
+				ViewAll
+				GetYesNo "Select fiducials on the Bottom Layer?", $yesNo
+			End
+			If $yesNo == $$NO
+				If $gCADmatic
+					# Do nothing
+				Else
+					StrWrite $message, "Manually add fiducials to the Bottom Fiducials layer (%.0n) prior to running the Check Plot macro.", $gFidB
+					MessageBox "Stentech Process", $message, 0
+				End
+			Else
+				GetPoint "Select 1st fiducial", $x,$y
+				CALLMACRO SelectAll, $x,$y
+				If $$SELGRPCNT >= 1
+					GetYesNo "Are all the fiducial pads selected?", $yesNo
+					If $yesNo == $$NO
+						# Select Fid
+						GetYesNo "Keep all these fiducials and add more? (Choose no to manually select all fiducials)", $yesNo
+						If $yesNo == $$NO
+							SelectGroup
+								Mode	0
+								Go
+							End
+							If $gCADmatic
+								# not needed for CADmatic users
+							Else
+								Redraw
+							End
+							SelectGroup
+								Mode         1
+								By           $$ITEMMODE
+								Flashes      $$YES
+								Draws        $$NO
+								Arcs         $$NO
+								Polys        $$NO
+								Text         $$NO
+								Drills       $$NO
+								Slots        $$NO
+								DrillCircles $$NO
+								DrillText    $$NO
+								MillPaths    $$NO
+								MillCircles  $$NO
+								Layer        0
+								Dcode        0  # Move all D-codes
+								Tool         0  # Move all tools
+								Polarity     0
+								Go $x,$y
+							End
+							GetYesNo "Is there a another fiducial?", $yesNo
+						End
+						Repeat $yesNo == $$YES
+							If $yesNo == $$YES # Select Fid
+								GetPoint "Select Next Fiducial", $x,$y
+								SelectGroup
+									Mode         1
+									By           $$ITEMMODE
+									Flashes      $$YES
+									Draws        $$NO
+									Arcs         $$NO
+									Polys        $$NO
+									Text         $$NO
+									Drills       $$NO
+									Slots        $$NO
+									DrillCircles $$NO
+									DrillText    $$NO
+									MillPaths    $$NO
+									MillCircles  $$NO
+									Layer        0
+									Dcode        0  # Move all D-codes
+									Tool         0  # Move all tools
+									Polarity     0
+									Go           $x,$y
+								End
+							End
+							GetYesNo "Is there a another fiducial?", $yesNo
+						End
+					End
+				End
+				Copy
+					By $$GROUPMODE
+					Layer 0 # Move from all visible layers
+					ToLayer $gFidB
+					Go 0,0, 0,0
+				End
+				SelectGroup
+					Mode	0
+					Go
+				End
+			End
+		End
+		PadRemoval
+			Type "S" # stacked only
+			Layer 0
+			Dcode 0
+			WindowMode $$NO
+			DrilledPadsOnly $$NO
+			Go
+		End
+	Else
+		IsEmptyLayer $gOrigPasteB
+		Set $NoBot = $$STATUS
+		If $NoBot == 0
+			# Set $yesNo = $$YES
+			# Select Bottom Fiducials and move to gFidB layer
+			Layern $gCopperB
+				Visibility 1
+			End
+			Layern $gOrigPasteB
+				Visibility 1
+			End
+			Layern $gBorderB
+				Visibility 1
+			End
+			SelectGroup
+				Mode	0
+				Go
+			End
+			ViewAll
+			GetYesNo "Select fiducials on the Bottom Layer?", $yesNo
+			If $yesNo == $$NO
+				MessageBox "Stentech Process", "You may manually add fiducials to the Top and/or Bottom Fiducials layers prior to running the CheckPlot macro!", 0
+			Else
+				GetPoint "Select 1st fiducial", $x,$y
+				CALLMACRO SelectAll, $x,$y
+				If $$SELGRPCNT >= 1
+					GetYesNo "Are all the fiducial pads selected?", $yesNo
+					If $yesNo == $$NO
+						# Select Fid
+						GetYesNo "Keep all these fiducials and add more? (Choose no to manually select all fiducials)", $yesNo
+						If $yesNo == $$NO
+							SelectGroup
+								Mode	0
+								Go
+							End
+							If $gCADmatic
+								# not needed for CADmatic users
+							Else
+								Redraw
+							End
+							SelectGroup
+								Mode         1
+								By           $$ITEMMODE
+								Flashes      $$YES
+								Draws        $$NO
+								Arcs         $$NO
+								Polys        $$NO
+								Text         $$NO
+								Drills       $$NO
+								Slots        $$NO
+								DrillCircles $$NO
+								DrillText    $$NO
+								MillPaths    $$NO
+								MillCircles  $$NO
+								Layer        0
+								Dcode        0  # Move all D-codes
+								Tool         0  # Move all tools
+								Polarity     0
+								Go           $x,$y
+							End
+							GetYesNo "Is there a another fiducial?", $yesNo
+						End
+						Repeat $yesNo == $$YES
+							If $yesNo == $$YES # Select Fid
+								GetPoint "Select Next Fiducial", $x,$y
+								SelectGroup
+									Mode         1
+									By           $$ITEMMODE
+									Flashes      $$YES
+									Draws        $$NO
+									Arcs         $$NO
+									Polys        $$NO
+									Text         $$NO
+									Drills       $$NO
+									Slots        $$NO
+									DrillCircles $$NO
+									DrillText    $$NO
+									MillPaths    $$NO
+									MillCircles  $$NO
+									Layer        0
+									Dcode        0  # Move all D-codes
+									Tool         0  # Move all tools
+									Polarity     0
+									Go           $x,$y
+								End
+							End
+							GetYesNo "Is there a another fiducial?", $yesNo
+						End
+
+					End
+				End
+				Copy
+					By $$GROUPMODE
+					Layer 	0 # Move from all visible layers
+					ToLayer $gFidB
+					Go 0,0, 0,0
+				End
+				SelectGroup
+					Mode	0
+					Go
+				End
+			End
+		End
+
+	End
+	PadRemoval
+		Type 		"S" # stacked only
+		Layer 		0
+		Dcode 		0
+		WindowMode 	$$NO
+		DrilledPadsOnly $$NO
+		Go
+	End
+ENDMACRO
+
+MACRO MainVis
+    StrWrite $log, "MainVis Macro Called %s", $$TIME
+    LogMessage 0, $log
+	CALLMACRO AllOff
+	Layern $gSilkT
+		Visibility 1
+	End
+	Layern $gOrigPasteT
+		Visibility 1
+	End
+	Layern $gModPasteT
+		Visibility 1
+	End
+	Layern $gBorderT
+		Visibility 1
+	End
+	Layern $gFidT
+		Visibility 1
+	End
+	ViewAll
+ENDMACRO
+
+MACRO MakeLabelCSV
+    StrWrite $log, "MakeLabelCSV Macro Called %s", $$TIME
+    LogMessage 0, $log
+	StrSet $dateISO      , "Date Error"
+	CALLMACRO _GetISODate, $dateISO
+	# Retrieve Checkplot info
+	GetDesignProperty "Customer:",     $gCustomer
+	GetDesignProperty "TopThickness:", $thickT
+	GetDesignProperty "BotThickness:", $thickB
+	GetDesignProperty "PartNum:",      $gPartNumT
+	GetDesignProperty "PartNumB:",     $gPartNumB
+	GetDesignProperty "Material:",     $Matchoice
+	GetDesignProperty "Process:",      $proc
+	GetDesignProperty "Coating:",      $coating
+	# Create CSV File
+	SplitPath $$DSNNAME, $dir, $gJobNumT, $tmp2
+	StrWrite $1, "%s\\Label_Info.csv", $dir
+	StrWrite $2, "%s\\Label_InfoB.csv", $dir
+	If $gPasteLayers == 2
+		# Create Text Block File for Bottom
+		FileOpen $tbef,  $2, "w"
+			FileWrite $tbef, "%s,%s,%s,%s,%s,%s,%s,%s ", $gCustomer, $gPartNumB, $thickB, $Matchoice, $gJobNumT, $proc, $coating, $dateISO
+		FileClose $tbef
+		# Open File for editing
+		# GetAppdatafolder $appDataPath
+		# StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+		# StrWrite $cmd,"%s %s", $bat, $2
+		# SysCmd $cmd
+	Else
+		If $gPasteLayers == 3
+			# Create Text Block File for Bottom
+			FileOpen $tbef,  $2, "w"
+				FileWrite $tbef, "%s,%s,%s,%s,%s,%s,%s,%s ", $gCustomer, $gPartNumB, $thickB, $Matchoice, $gJobNumT, $proc, $coating, $dateISO
+			FileClose $tbef
+			# Open File for editing
+			# GetAppdatafolder $appDataPath
+			# StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+			# StrWrite $cmd,"%s %s", $bat, $2
+			# SysCmd $cmd
+		End
+		# Create Text Block File for Top
+		FileOpen $tbef,  $1, "w"
+			FileWrite $tbef, "%s,%s,%s,%s,%s,%s,%s,%s ", $gCustomer, $gPartNumB, $thickB, $Matchoice, $gJobNumT, $proc, $coating, $dateISO
+		FileClose $tbef
+		# Open File for editing
+		# GetAppdatafolder $appDataPath
+		# StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+		# StrWrite $cmd,"%s %s", $bat, $1
+		# SysCmd $cmd
+	End
+ENDMACRO
+
+MACRO MaxLoadedAp
+    StrWrite $log, "MaxLoadedAp Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $1 is layer to check
+	# returns max loaded aperture in $2
+	If $$CALLDEPTH == 0
+		LogMessage 0, "MaxLoadedAp macro must be called from another macro..."
+		Stop "MaxLoadedAp macro must be called from another macro..."
+	End
+	#	Set $2 = 4000
+	Set $2 = 999		# lowered to speed up...
+	Repeat $$STATUS == $$FALSE
+		Calc $2 = $2 - 1
+		GetApInfo $1, $2, $shp, $xs, $ys, $type, $tool, $toolsize, $legend
+	End
+ENDMACRO
+
+MACRO MaxLoadedLayer
+    StrWrite $log, "MaxLoadedLayer Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# returns max loaded layer in $1
+	If $$CALLDEPTH == 0
+		LogMessage 0, "MaxLoadedLayer macro must be called from another macro..."
+		Stop "MaxLoadedLayer macro must be called from another macro..."
+	End
+	Set $1 = $$MAXLAYERS + 1
+	Calc $$STATUS = $$FALSE
+	If $$VERSION < 9
+		Repeat $$STATUS == $$FALSE
+			Calc $1 = $1 - 1
+			ActiveLayer $1
+		End
+	Else
+		Set $bOkMore = $$TRUE
+		Repeat $bOkMore
+			Calc $1 = $1 - 1
+			GetLayer	$1, $fn, $ln, $ap, $vis, $fc, $dc, $type, $pol, $key, $bHasData,$lx,$ly, $ux,$uy, $netid
+			If $$STATUS
+				If $bHasData
+					Strlen $ln	# returns length in $$STATUS
+					If $$STATUS
+						Calc $bOkMore = $$FALSE
+					End
+				End
+			Else
+				$bOkMore = $$FALSE
+			End
+		End
+	End
+ENDMACRO
+
+MACRO OverlayViewB
+    StrWrite $log, "OverlayViewB Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $index = 1
+	Repeat $index <= $$MAXLAYERS
+		Layern $index
+			Visibility 0
+		End
+		Calc $index = $index + 1
+	End
+	Layern $gOrigPasteB
+		Visibility 1
+	End
+	Layern $gModPasteB
+		Visibility 1
+	End
+	Layern $gFidB
+		Visibility 1
+	End
+	ViewAll
+ENDMACRO
+
+MACRO OverlayViewT
+    StrWrite $log, "OverlayViewT Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $index = 1
+	Repeat $index <= $$MAXLAYERS
+		Layern $index
+			Visibility 0
+		End
+		Calc $index = $index + 1
+	End
+	Layern $gOrigPasteT
+		Visibility 1
+	End
+	Layern $gModPasteT
+		Visibility 1
+	End
+	Layern $gFidT
+		Visibility 1
+	End
+	ViewAll
+ENDMACRO
+
+MACRO PasteCheckVis
+    StrWrite $log, "PasteCheckVis Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $index = 1
+	Set $ctrX = 0
+	Set $ctrY = 0
+	Repeat $index <= $$MAXLAYERS
+		Layern $index
+			Visibility 0
+		End
+		Calc $index = $index + 1
+	End
+	Layern $gCopperT
+		Visibility 1
+	End
+	Layern $gOrigPasteT
+		Visibility 1
+	End
+	ActiveLayer $gOrigPasteT
+	CALLMACRO _GetCenter, $gOrigPasteT, $ctrX,$ctrY
+	ViewAll
+	# ZoomIn $ctrX,$ctrY
+ENDMACRO
+
+MACRO ResetSelect
+    StrWrite $log, "ResetSelect Macro Called %s", $$TIME
+    LogMessage 0, $log
+	SelectFilter
+		By       $$WINDOWMODE
+		Boundary $$YES
+		AddTypes 0
+		Dcode    0
+		Layer    0
+		Polarity 0
+	End
+ENDMACRO
+
+MACRO SelectAll
+    StrWrite $log, "SelectAll Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $sLayer = 0
+	If $$CALLDEPTH == 0
+		GetPoint "Select Item:", $x,$y
+	Else
+		Set $x = $1
+		Set $y = $2
+	End
+	GetFreeLayer $sLayer
+	Copy
+		By       $$ITEMMODE
+		Flashes  $$YES
+		Draws    $$NO
+		Arcs     $$NO
+		Polys    $$NO
+		Text     $$NO
+		Polarity 0
+		Layer    0  # Copy from all visible
+		ToLayer  $sLayer
+		Dcode    0  # Copy all D-codes
+		InPlace  $$YES
+		Go       $x,$y
+	End
+	GetFirstItem $sLayer, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	GetExtents 0, $lx,$ly, $ux,$uy, $$YES, $$YES
+	SelectGroup
+		Mode	0
+		Go
+	End
+	SelectGroup
+		Mode     1
+		By       $$WINDOWMODE
+		Boundary $$YES
+		Flashes  $$YES
+		Draws    $$NO
+		Arcs     $$NO
+		Polys    $$NO
+		Layer    0
+		Dcode    $dcode
+		Go       $lx,$ly, $ux,$uy
+	End
+	Erase
+		By       $$WINDOWMODE
+		Boundary $$YES
+		Layer    $sLayer
+		Dcode    0  # Move all D-codes
+		Tool     0  # Move all tools
+		Polarity 0
+		Go       $lx,$ly, $ux,$uy
+	End
+	ViewAll
+ENDMACRO
+
+MACRO SetLayerTypes
+    StrWrite $log, "SetLayerTypes Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# 1 - Top Silk
+	Layern $gSilkT
+		Type       $$LTSILKTOP
+		LyrName    "Silk Top"
+		FlashColor "grey"
+		DrawColor  "grey"
+		Visibility 1
+	End
+	# 2 - Original Paste Top
+	Layern $gOrigPasteT
+		Type       $$LTTOP
+		LyrName    "Original Paste Top"
+		FlashColor "Red"
+		DrawColor  "Red4"
+		Visibility 1
+	End
+	# 3 - Modified Paste Top
+	Layern $gModPasteT
+		Type       $$LTPASTEMASKTOP
+		LyrName    "Modified Paste Top"
+		FlashColor "Blue"
+		DrawColor  "Midnight Blue"
+		Visibility 1
+	End
+	# 4 - Border Top
+	Layern $gBorderT
+		Type       $$LTBORDER
+		LyrName    "Border"
+		FlashColor "Orange"
+		DrawColor  "Orange"
+		Visibility 1
+	End
+	# 5 - Bottom Silk
+	Layern $gSilkB
+		Type       $$LTSILKBOT
+		LyrName    "Silk Bottom"
+		Visibility 1
+		FlashColor "grey"
+		DrawColor  "grey"
+	End
+	#  6 - Original Paste Bottom
+	Layern $gOrigPasteB
+		LyrName    "Original Paste Bot"
+		Type       $$LTBOTTOM
+		FlashColor "Red"
+		DrawColor  "Red4"
+		Visibility 1
+	End
+	#  7 - Modified Paste Bottom
+	Layern $gModPasteB
+		Type       $$LTPASTEMASKBOT
+		LyrName    "Modified Paste Bot"
+		FlashColor "Blue"
+		DrawColor  "Midnight Blue"
+		Visibility 1
+	End
+	# 8 - Bottom Border
+	Layern $gBorderB
+		Type       $$LTBORDER
+		LyrName    "Bottom Border"
+		FlashColor "Orange"
+		DrawColor  "Orange"
+		Visibility 1
+	End
+	# 9 - NC Drill Layer
+	Layern $gNCDrill
+		LyrName    "NC"
+		FlashColor "0xb0b0b0"
+		DrawColor  "0xb0b0b0"
+		Visibility 0
+	End
+	# 10 - Check Plot Top
+	Layern $gCheckPlotT
+		LyrName    "CheckPlot Top"
+		FlashColor "0xff8080"
+		DrawColor  "0xc0c0c0"
+		Visibility 0
+	End
+	# 11 - Check Plot Bottom
+	Layern $gCheckPlotB
+		FlashColor "0xff8080"
+		DrawColor  "0xc0c0c0"
+		LyrName    "CheckPlot Bot"
+		Visibility 0
+	End
+	# 12 - Laser Cut Top
+	Layern $gCutT
+		Type       $$LTOTHER
+		FlashColor "Yellow"
+		DrawColor  "Yellow"
+		LyrName    "Laser Cut Top"
+		Visibility 0
+	End
+	# 13 - Laser Cut Bottom
+	Layern $gCutB
+		Type       $$LTOTHER
+		FlashColor "Yellow"
+		DrawColor  "Yellow"
+		LyrName    "Laser Cut Bot"
+		Visibility 0
+	End
+	# 14 - Engrave Top
+	Layern $gEngraveT
+		Type       $$LTOTHER
+		FlashColor "0xff9966"
+		DrawColor  "0x993300"
+		LyrName    "Laser Engrave Top"
+		Visibility 0
+	End
+	# 15 - Engrave Bottom
+	Layern $gEngraveB
+		Type       $$LTOTHER
+		FlashColor "0xff9966"
+		DrawColor  "0x993300"
+		LyrName    "Laser Engrave Bot"
+		Visibility 0
+	End
+	# 16 - Fiducial Top
+	Layern $gFidT
+		Type       $$LTOTHER
+		LyrName    "Top Fiducials"
+		FlashColor "0x9933ff"
+		DrawColor  "0x9900ff"
+		Visibility 0
+	End
+	# 17 - Fiducial Bottom
+	Layern $gFidB
+		Type       $$LTOTHER
+		LyrName    "Bottom Fiducials"
+		FlashColor "0x9933ff"
+		DrawColor  "0x9900ff"
+		Visibility 0
+	End
+	# 18 - Text Top
+	Layern $gTxtT
+		Type       $$LTOTHER
+		LyrName    "Top Text"
+		FlashColor "Purple"
+		DrawColor  "Purple"
+		Visibility 0
+	End
+	# 19 - Text Bottom
+	Layern $gTxtB
+		Type       $$LTOTHER
+		LyrName    "Bottom Text"
+		FlashColor "Purple"
+		DrawColor  "Purple"
+		Visibility 0
+	End
+	# 20 - Top Copper Layer
+	Layern $gCopperT
+		Type       $$LTOTHER
+		LyrName    "Top Copper"
+		FlashColor "green"
+		DrawColor  "darkgreen"
+		Visibility 1
+	End
+	# 21 - Solder Mask Top
+	Layern $gSolderMaskT
+		Type       $$LTMASKTOP
+		LyrName    "SolderMask Top"
+		FlashColor "LightSeaGreen"
+		DrawColor  "DarkSeaGreen"
+		Visibility 1
+	End
+	# 22 - Bottom Copper
+	Layern $gCopperB
+		Type       $$LTOTHER
+		LyrName    "Bottom Copper"
+		FlashColor "green"
+		DrawColor  "darkgreen"
+		Visibility 1
+	End
+	# 23 - Solder Mask Bottom
+	Layern $gSolderMaskB
+		Type       $$LTMASKBOT
+		LyrName    "Solder Mask Bot"
+		FlashColor "LightSeaGreen"
+		DrawColor  "DarkSeaGreen"
+		Visibility 1
+	End
+	# 24 - Drill Drawing
+	Layern $gDrawing
+		Type       $$LTOTHER
+		LyrName    "Drill Drawing"
+		FlashColor "0x4EC5F1"
+		DrawColor  "0x4EC5F1"
+		Visibility 0
+	End
+	# 25 - Top    .20 (Text and Oultine)
+	Layern $gTxtOut20T
+		LyrName    "Outline.20 Top"
+		FlashColor "0x6ab653"
+		DrawColor  "0xc275e6"
+		Visibility 0
+	End
+	# 26 - Bottom .20 (Text and Oultine)
+	Layern $gTxtOut20B
+		LyrName    "Outline .20 Bot"
+		FlashColor "0x6ab653"
+		DrawColor  "0xc275e6"
+		Visibility 0
+	End
+	# 27 - Size plot Top
+	Layern $gSizePlotT
+		LyrName    "Size Plot Top"
+		FlashColor "CornflowerBlue"
+		DrawColor  "ForestGreen"
+	End
+	# 28 - Size plot Bottom
+	Layern $gSizePlotB
+		LyrName    "Size Plot Bottom"
+		FlashColor "CornflowerBlue"
+		DrawColor  "ForestGreen"
+	End
+	# 29 - LMD Top Layer
+	Layern $gLMDT
+		LyrName    "LMD Top Layer"
+		FlashColor "0xFF5632"
+		DrawColor  "0xFFF640"
+	End
+	# 30 - LMD Bottom Layer
+	Layern $gLMDB
+		LyrName    "LMD Bottom Layer"
+		FlashColor "0xFF5632"
+		DrawColor  "0xFFF640"
+	End
+	# 33 - NSG top file layer number
+	Layern $gNSGLayerT
+		Type       $$LTOTHER
+		LyrName    "NSG Top Layer"
+		FlashColor "0x6ab653"
+		DrawColor  "0x9eb3ba"
+    End
+	# 34 - NSG bottom file layer number
+	Layern $gNSGLayerB
+		Type       $$LTOTHER
+		LyrName    "NSG Bottom Layer"
+		FlashColor "0x9eb3ba"
+		DrawColor  "0x6ab653"
+    End
+	# 35 - Alignment Layer Top
+	Layern $gAlignT
+		LyrName		"Alignment Layer Top.12"
+		FlashColor  "Yellow"
+		DrawColor   "0xffc0cb"
+	End
+	# 36 - Alignment Layer Bottom
+	Layern $gAlignB
+		LyrName		"Alignment Layer Bottom.12"
+		FlashColor  "0xffc0cb"
+		DrawColor   "Yellow"
+	End
+	# 37 - NC Drill Layer Mirrored
+	Layern $gNCDrillB
+		LyrName    "NC_Mirrored"
+		FlashColor "0xb0b0b0"
+		DrawColor  "0xb0b0b0"
+		Visibility 0
+	End
+	GetExtents -1, $lx,$ly, $ux,$uy
+	ViewAll
+ENDMACRO
+
+MACRO SetThickness
+    StrWrite $log, "SetThickness Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# Get Thickness
+	If $gPasteLayers == 1
+		GetMinFlashLayerInfo $gOrigPasteT, $mTdim, $mTpitch, $mTdim2
+		Calc $mTdim   = $mTdim   * 1000
+		Calc $mTdim2  = $mTdim2  * 1000
+		Calc $mTpitch = $mTpitch * 1000
+		StrWrite $ThickPrompt, "Min Pad: %.1nX%.1n Min Pitch: %.1n, Enter Thickness:", $mTdim, $mTdim2, $mTpitch
+		GetValue $ThickPrompt, $gThickT
+	End
+	If $gPasteLayers > 1
+		GetMinFlashLayerInfo $gOrigPasteB, $mBdim, $mBpitch, $mBdim2
+		Calc $mBdim   = $mBdim   * 1000
+		Calc $mBdim2  = $mBdim2  * 1000
+		Calc $mBpitch = $mBpitch * 1000
+		If $gPasteLayers == 2
+			StrWrite $ThickPrompt, "Min Pad: %.1nX%.1n Pitch: %.1n, Enter Thickness:", $mBdim, $mBdim2, $mBpitch
+			GetValue $ThickPrompt, $gThickT
+		End
+		If $gPasteLayers == 3
+			GetMinFlashLayerInfo $gOrigPasteT, $mTdim, $mTpitch, $mTdim2
+			Calc $mTdim   = $mTdim   * 1000
+			Calc $mTdim2  = $mTdim2  * 1000
+			Calc $mTpitch = $mTpitch * 1000
+			StrWrite $ThickPrompt, "Min Pad: %.1nX%.1n Min Pitch: %.1n, Top Thickness:", $mTdim, $mTdim2, $mTpitch
+			GetValue $ThickPrompt, $gThickT
+			Set $gThickB = $gThickT
+			StrWrite $ThickPrompt, "Min Pad: %.1nX%.1n Pitch: %.1n, Bottom Thickness:", $mBdim, $mBdim2, $mBpitch
+			GetValue $ThickPrompt, $gThickB
+		End
+	End
+	If $gThickB == 0
+		Set $gThickB = $gThickT
+	End
+ENDMACRO
+
+MACRO UpdateJobDetails
+    StrWrite $log, "UpdateJobDetails Macro Called %s", $$TIME
+    LogMessage 0, $log
+    StrSet $thickT,   ""
+    StrSet $thickB,   ""
+    Set $TxtDropSel = 1
+    GetDesignProperty "Customer:",        $gCustomer
+    GetDesignProperty "JobNum:",         $gJobNumT
+    GetDesignProperty "JobNumB:",        $gJobNumB
+    GetDesignProperty "Top PN:",         $gPartNumT
+    GetDesignProperty "Bot PN:",         $gPartNumB
+    GetDesignProperty "TopThickness:",   $thickT
+    StrRead $thickT,  "%n",             $gThickT
+    GetDesignProperty "BotThickness:",   $thickB
+    StrRead $thickB,  "%n",             $gThickB
+    GetDesignProperty "Material:",       $gMatT
+    GetDesignProperty "MaterialB:",      $gMatB
+    GetDesignProperty "Process:",        $gProcessT
+    GetDesignProperty "ProcessB:",       $gProcessB
+    GetDesignProperty "Coating:",        $gCoatT
+    GetDesignProperty "CoatingB:",       $gCoatB
+    GetDesignProperty "Lead Free:",      $gLeadFree
+    GetDesignProperty "Frame:",          $gFrame
+    GetDesignProperty "Text Method:",    $gTextMode
+    GetDesignProperty "Fid Type:",       $gFidType
+    GetDesignProperty "Shape Set:",      $gShapeSet
+    GetDesignProperty "Shape SetB:",     $gShapeSetB
+    GetDesignProperty "Engineered By:",  $gOp
+    # Set form variables
+    Set $MatTDropSel    = 1
+    Set $MatBDropSel    = 1
+    Set $ProcDropSel    = 1
+    Set $CoatDropSel    = 1
+    Set $CoatBDropSel   = 1
+    Set $leadDropSel    = 1
+    Set $FrameDropSel   = 1
+    Set $TxtDropSel     = 1
+    Set $fidTypeDropSel = 1
+    # Set Materials array for form
+    StrArray $materialArray(4)
+        StrSet $materialArray(1), "PHD"
+        StrSet $materialArray(2), "Fine Grain"
+        StrSet $materialArray(3), "Nickel"
+        StrSet $materialArray(4), "Other"
+    # Select current value
+    Set $i = 1
+    Repeat $i <= 4
+        StrCmp $gMatT, $materialArray($i)
+        If $$STATUS == 0
+            Set $MatTDropSel = $i
+        End
+        StrCmp $gMatB, $materialArray($i)
+        If $$STATUS == 0
+            Set $MatBDropSel = $i
+        End
+        Calc $i = $i + 1
+    End
+    # Set Coatings Array
+    StrArray $coatingArray(5)
+        StrSet $coatingArray(1), "None"
+        StrSet $coatingArray(2), "Nano Wipe"
+        StrSet $coatingArray(3), "NanoSlic"
+        StrSet $coatingArray(4), "Advanced Nano"
+        StrSet $coatingArray(5), "BluPrint"
+    # Select current value
+    Set $i = 1
+    Repeat $i <= 5  # Fixed to include all coating options
+        StrCmp $gCoatT, $coatingArray($i)
+        If $$STATUS == 0
+            Set $CoatDropSel = $i
+        End
+        StrCmp $gCoatB, $coatingArray($i)
+        If $$STATUS == 0
+            Set $CoatBDropSel = $i
+        End
+        Calc $i = $i + 1
+    End
+    # Set LeadFree Array
+    StrArray $leadFreeArray(2)
+        StrSet $leadFreeArray(1), "Yes"
+        StrSet $leadFreeArray(2), "No"
+    # Select current value
+    Set $leadDropSel = 2
+    StrCmp $gLeadFree, "Yes"
+    If $$STATUS == 0
+        Set $leadDropSel = 1
+    End
+    StrCmp $gLeadFree, "No"
+    If $$STATUS == 0
+        Set $leadDropSel = 2
+    End
+    # Set Text Array
+    StrArray $textArray(5)
+        StrSet $textArray(1), "Label"
+        StrSet $textArray(2), "Engraved (contact)"
+        StrSet $textArray(3), "Engraved (squeegee)"
+        StrSet $textArray(4), "Cut-Thru"
+        StrSet $textArray(5), "Marked"
+    # Select current value
+    Set $TxtDropSel = 1
+    Set $i = 1
+    Repeat $i <= 4
+        StrCmp $gTextMode, $textArray($i)
+        If $$STATUS == 0
+            Set $TxtDropSel = $i
+            Calc $i = 5  # Exit loop early
+        Else
+            Calc $i = $i + 1
+        End
+    End
+    # New choices via Other Users: Laser cut, LaserStep, Chemetch Step, Electroform
+    StrArray $processArray(6)
+        StrSet $processArray(1), "Laser Cut"
+        StrSet $processArray(2), "LaserSTEP"
+        StrSet $processArray(3), "Chemetch Step"
+        StrSet $processArray(4), "Electroform"
+        StrSet $processArray(5), "Electroform Step"
+        StrSet $processArray(6), "Milled Step"
+    # Select current value
+    Set $ProcDropSel = 1
+    Set $i = 1
+    Repeat $i <= 6
+        StrCmp $gProcessT, $processArray($i)
+        If $$STATUS == 0
+            Set $ProcDropSel = $i
+            Calc $i = 8  # Exit loop early
+        Else
+            Calc $i = $i + 1
+        End
+    End
+    # Handle empty string case
+    StrCmp $gProcessT, ""
+    If $$STATUS == 0
+        Set $ProcDropSel = 1
+    End
+    # Set Fid Type Array ($gFidType)
+    StrArray $fidTypeArray(4)
+        StrSet $fidTypeArray(1), "Board"
+        StrSet $fidTypeArray(2), "Squeegee"
+        StrSet $fidTypeArray(3), "Both"
+        StrSet $fidTypeArray(4), "Cut-Thru"
+    # Select current value
+    Set $fidTypeDropSel = 1
+    Set $i = 1
+    Repeat $i <= 4
+        StrCmp $gFidType, $fidTypeArray($i)
+        If $$STATUS == 0
+            Set $fidTypeDropSel = $i
+            Calc $i = 5  # Exit loop early
+        Else
+            Calc $i = $i + 1
+        End
+    End
+    # Handle empty string case
+    StrCmp $gFidType, ""
+    If $$STATUS == 0
+        Set $fidTypeDropSel = 1
+    End
+    # Read list of Frames
+    StrWrite $frameList, "%sFrame_List.txt", $gFrames
+    Set $cnt = 1
+    StrSet $readToken, "%s"
+    CALLMACRO _GetListLength, $frameList, $cnt, $readToken
+    StrArray $frames($cnt)
+    Calc $lines = $cnt
+    Set $cnt = 1
+    Set $FrameDropSel = $cnt
+    FileOpen $fid,  $frameList, "r"
+    If $$STATUS != 0
+        Repeat $cnt < $lines  # Naturally avoid bogus last line with <
+            FileRead $fid, "%s", $frames($cnt)
+            If $$STATUS != 0
+                StrCmp $gFrame, $frames($cnt)
+                If $$STATUS == 0
+                    Set $FrameDropSel = $cnt
+                End
+                Calc $cnt = $cnt + 1
+            End
+        End
+        FileClose $fid
+    Else
+        StrWrite $log, "Failed to read frame list at\r\r%s", $frameList
+        LogMessage 0, $log
+        Stop $log
+    End
+    Set $formId   = -1
+    Set $Edit1    = -1
+    Set $Edit2    = -1
+    Set $Edit3    = -1
+    Set $Edit4    = -1
+    Set $Edit5    = -1
+    Set $Edit6    = -1
+    Set $Edit7    = -1
+    Set $Drop2    = -1
+    Set $Drop3    = -1
+    Set $Drop4    = -1
+    Set $Drop5    = -1
+    Set $Drop6    = -1
+    Set $Drop7    = -1
+    Set $Drop8    = -1
+    Set $Drop9    = -1
+    Set $Drop10   = -1
+    Set $Button1  = -1
+    Set $Button2  = -1
+    Set $Static1  = -1
+    Set $Static2  = -1
+    Set $Static3  = -1
+    Set $Static4  = -1
+    Set $Static5  = -1
+    Set $Static6  = -1
+    Set $Static7  = -1
+    Set $Static8  = -1
+    Set $Static9  = -1
+    Set $Static10 = -1
+    Set $Static11 = -1
+    Set $Static12 = -1
+    Set $Static13 = -1
+    Set $Static14 = -1
+    Set $Static15 = -1
+    Set $Static16 = -1
+    Set $OKBtnClicked = $$FALSE
+    Set $CancelBtnClicked = $$FALSE
+    StrWrite $dialogTitle, "Update Job Details    V-%s", $gMacroVersion
+    DefineForm
+        FormId      $formId
+        Title       $dialogTitle
+        Margin      0.4
+        StaticText  $Static1,  0.30, 0.00, 2.00, 0.25, "Top Thickness (mils):",    $$FALSE
+        StaticText  $Static2,  0.30, 0.35, 2.00, 0.25, "Bottom Thickness (mils):", $$FALSE
+        StaticText  $Static3,  0.30, 0.70, 2.00, 0.25, "Material (Top):",         $$FALSE
+        StaticText  $Static4,  0.30, 1.05, 2.00, 0.25, "Material (Bottom):",      $$FALSE
+        StaticText  $Static5,  0.30, 1.40, 2.00, 0.25, "Process:",                $$FALSE
+        StaticText  $Static6,  0.30, 1.75, 2.00, 0.25, "Coatings (Top):",        $$FALSE
+        StaticText  $Static7,  0.30, 2.10, 2.00, 0.25, "Coatings (Bottom):",     $$FALSE
+        StaticText  $Static8,  0.30, 2.45, 2.00, 0.25, "Lead Free?",             $$FALSE
+        StaticText  $Static9,  0.30, 2.80, 2.00, 0.25, "Frame:",                $$FALSE
+        StaticText  $Static10, 0.30, 3.15, 2.00, 0.25, "Text Process:",         $$FALSE
+        StaticText  $Static11, 0.30, 3.50, 2.00, 0.25, "Operator:",             $$FALSE
+        StaticText  $Static12, 0.30, 3.85, 2.00, 0.25, "Job number (Top):",     $$FALSE
+        StaticText  $Static13, 0.30, 4.20, 2.00, 0.25, "Job number (Bottom):",  $$FALSE
+        StaticText  $Static14, 0.30, 4.55, 2.00, 0.25, "Customer Part #(Top):", $$FALSE
+        StaticText  $Static15, 0.30, 4.90, 2.00, 0.25, "Customer Part #(Bottom):", $$FALSE
+        StaticText  $Static16, 0.30, 5.25, 2.00, 0.25, "Fid Type:",            $$FALSE
+        EditControl  $Edit1,   2.25, 0.00, 2.50, 0.25, $thickT
+        EditControl  $Edit2,   2.25, 0.35, 2.50, 0.25, $thickB
+        DroplistControl $Drop2,   2.25, 0.70, 2.50, 0.50, $materialArray, $MatTDropSel
+        DroplistControl $Drop3,   2.25, 1.05, 2.50, 0.50, $materialArray, $MatBDropSel
+        DroplistControl $Drop4,   2.25, 1.40, 2.50, 1.50, $processArray,  $ProcDropSel
+        DroplistControl $Drop5,   2.25, 1.75, 2.50, 1.50, $coatingArray,  $CoatDropSel
+        DroplistControl $Drop6,   2.25, 2.10, 2.50, 1.50, $coatingArray,  $CoatBDropSel
+        DroplistControl $Drop7,   2.25, 2.45, 2.50, 1.50, $leadFreeArray, $leadDropSel
+        DroplistControl $Drop8,   2.25, 2.80, 2.50, 1.50, $frames,        $FrameDropSel
+        DroplistControl $Drop9,   2.25, 3.15, 2.50, 1.50, $textArray,    $TxtDropSel
+        EditControl  $Edit3,   2.25, 3.50, 2.50, 0.25, $gOp
+        EditControl  $Edit4,   2.25, 3.85, 2.50, 0.25, $gJobNumT
+        EditControl  $Edit5,   2.25, 4.20, 2.50, 0.25, $gJobNumB
+        EditControl  $Edit6,   2.25, 4.55, 2.50, 0.25, $gPartNumT
+        EditControl  $Edit7,   2.25, 4.90, 2.50, 0.25, $gPartNumB
+        DroplistControl $Drop10,  2.25, 5.25, 2.50, 1.50, $fidTypeArray, $fidTypeDropSel
+        ButtonControl $Button1, 0.50, 5.60, 1.75, 0.50, "OK",     $OKBtnClicked
+        ButtonControl $Button2, 2.50, 5.60, 1.75, 0.50, "Cancel", $CancelBtnClicked
+    End
+    OpenForm $formId
+    If $CancelBtnClicked
+        LogMessage 0, "UpdateJobDetails Macro Cancelled."
+    End
+    PutDesignProperty "TopThickness:", $thickT
+    PutDesignProperty "BotThickness:", $thickB
+    StrRead $thickT, "%n", $gThickT
+    StrRead $thickB, "%n", $gThickB
+    StrSet  $gMatT, $materialArray($MatTDropSel)
+    StrSet  $gMatB, $materialArray($MatBDropSel)
+    # Check for spaces in gJobNum
+    StrLoc $gJobNumT, " "
+    Repeat $$STATUS > 0
+        GetString "Re-enter Stentech Job number (No spaces allowed):", $gJobNumT
+        StrLoc $gJobNumT, " "
+    End
+    # Prompt User to Import Files and order layers
+    # Create Job Folder
+    GetAppDataFolder $appDataPath
+    StrWrite $bat,  "%s\\macros\\ReferenceFiles\\CreateFolders.bat", $appDataPath
+    StrWrite $gDir, "%s%s\\%s", $gWorking, $gCustomer, $gJobNumT
+    StrWrite $cmd,  "%s %s", $bat, $gDir
+    SysCmd $cmd
+    # Save Design to customer job directory
+    StrWrite $dsn,  "%s\\%s.vcam", $gDir, $gJobNumT
+    SaveAs $dsn
+    StrCmp $materialArray($MatTDropSel), "Nickel"
+    If $$STATUS == 0
+        Set $gAR = .6
+    Else
+        StrCmp $materialArray($MatTDropSel), "PHD"
+        If $$STATUS == 0
+            Set $gAR = .6
+        End
+    End
+    StrSet $gProcessT,  $processArray($ProcDropSel)
+    StrSet $gCoatT,    $coatingArray($CoatDropSel)
+    StrSet $gCoatB,    $coatingArray($CoatBDropSel)
+    StrSet $gFidType,  $fidTypeArray($fidTypeDropSel)
+    StrCmp $gCoatT,    "NanoSlic"
+    If $$STATUS == 0
+        Set $gAR = .5
+    End
+    StrCmp $gCoatT,    "Advanced Nano"
+    If $$STATUS == 0
+        Set $gAR = .55
+    End
+    StrCmp $gCoatT,    "BluPrint"
+    If $$STATUS == 0
+        Set $gAR = .5
+    End
+    StrSet $gTextMode, $textArray($TxtDropSel)
+    StrSet $gLeadFree, $leadFreeArray($leadDropSel)
+    StrSet $gFrame,    $frames($FrameDropSel)
+    PutDesignProperty  "Fid Type:",    $gFidType
+    PutDesignProperty  "Process:",     $gProcessT
+    PutDesignProperty  "Coating:",     $gCoatT
+    PutDesignProperty  "CoatingB:",    $gCoatB
+    PutDesignProperty  "JobNum:",      $gJobNumT
+    PutDesignProperty  "JobNumB:",     $gJobNumB
+    PutDesignProperty  "Text Method:", $gTextMode
+    PutDesignProperty  "Lead Free:",   $gLeadFree
+    PutDesignProperty  "Frame:",       $gFrame
+    PutDesignProperty  "Top PN:",      $gPartNumT
+    PutDesignProperty  "Bot PN:",      $gPartNumB
+    PutDesignProperty  "Material:",    $gMatT
+    PutDesignProperty  "MaterialB:",   $gMatB
+    # Log saved coating values for debugging
+    StrWrite $log, "Saved gCoatT: %s", $gCoatT
+    LogMessage 0, $log
+    StrWrite $log, "Saved gCoatB: %s", $gCoatB
+    LogMessage 0, $log
+ENDMACRO
+
+MACRO UpdateLibrary
+    StrWrite $log, "UpdateLibrary Macro Called %s", $$TIME
+    LogMessage 0, $log
+	StrSet $updateLib, "Yes"
+	CALLMACRO _GetUpdateProp, $updateLib
+	StrCmp  $updateLib, "Yes"
+	If $$STATUS == 0
+		StrCmp $gShapeSet, "No_Edits"
+		If $$STATUS != 0
+			StrCmp  $gCustomer, ""
+			If $$STATUS == 0
+				# Set other Vars
+				StrWrite $cmpList, "%sCompany_List.txt", $gMaster
+				# StrSet $cmpList, $gMaster
+				StrSet $job, $gMaster
+				# Read list of Company names for number in list
+				Set $cnt = 1
+				StrSet $read, ""
+				FileOpen $fid, $cmpList, "r"
+				If $$STATUS != 0
+					Repeat $$STATUS > 0  # == $$TRUE
+						FileRead $fid, "%s", $read
+						If $$STATUS != 0
+							Calc $cnt = $cnt + 1
+						End
+					End
+				Else
+					StrWrite $log, "Failed to read company list. \r\r%s", $cmpList
+					LogMessage 0, $log
+					Stop $log
+				End
+				Calc $lines = $cnt
+				FileClose $fid
+				StrArray $companyNames($cnt)
+				Set $cnt = 1
+				FileOpen $fid, $cmpList, "r"
+				If $$STATUS != 0
+					Repeat $cnt < $lines  # Naturally avoid bogus last line with <
+						FileRead $fid, "%s", $companyNames($cnt)
+						Calc $cnt = $cnt + 1
+					End
+				Else
+					StrWrite $log, "Failed to read company list. \r\r%s", $cmpList
+					LogMessage 0, $log
+					Stop $log
+				End
+				FileClose $fid
+				# Get the missing customer name
+				GetListChoice "Choose Customer Name:", $gCustomer, $companyNames
+			End
+			If $gCADmatic
+				Set $update = $$NO
+			Else
+				StrWrite $message, "Update %s library with all of your changes/additions?", $gCustomer
+				GetYesNo $message, $update
+			End
+			If $update == $$YES
+				# SAVE CUSTOMER FPL
+				StrWrite $custLib, "%s%s.fpl", $gMaster, $gCustomer
+				StrWrite $log, "Saving customer library %s", $custLib
+				LogMessage 0, $log
+				SaveFootPrintLibrary $custLib
+				If $$STATUS !=0
+					StrWrite $updateComplete, "%s library has been updated", $gCustomer
+					LogMessage 0, $updateComplete
+					# MessageBox "Process Complete", $updateComplete, 0
+				Else
+					StrWrite $log, "Failed to read company list. \r\r%s", $cmpList
+					LogMessage 0, $log
+					Stop $log
+				End
+			Else
+				If $gCADmatic
+					Set $update = $$NO
+				Else
+					StrWrite $message, "Prevent this design from updating the %s library?", $gCustomer
+					GetYesNo $message, $update
+				End
+				If $update == $$YES
+					StrSet $updateLib, "No"
+					CALLMACRO _GetUpdateProp, $updateLib
+					SaveAs $$DSNNAME
+				End
+			End
+		Else
+			StrWrite $noUpdate, "This design is using the No_Edits shapeset. (%s)", $gCustomer
+			If $gCADmatic
+				LogMessage 0, $noUpdate
+			Else
+				LogMessage 0, $noUpdate
+				MessageBox "Library not updated", $noUpdate, 0
+			End
+		End
+	Else
+		StrWrite $noUpdate, "This design is prevented from updating the customer library. (%s)", $gCustomer
+		LogMessage 0, $noUpdate
+		MessageBox "Library not updated", $noUpdate, 0
+	End
+ENDMACRO
+
+MACRO ViewBottom
+    StrWrite $log, "ViewBottom Macro Called %s", $$TIME
+    LogMessage 0, $log
+	CALLMACRO AllOff
+	Layern $gSilkB
+		Visibility 1
+	End
+	Layern $gOrigPasteB
+		Visibility 1
+	End
+	Layern $gModPasteB
+		Visibility 1
+	End
+	Layern $gBorderB
+		Visibility 1
+	End
+	ViewAll
+ENDMACRO
+
+MACRO _AbsDiff
+    StrWrite $log, "_AbsDiff Macro Called %s", $$TIME
+    LogMessage 0, $log
+	If $$CALLDEPTH == 0
+		LogMessage 0,  "_AbsDiff macro must be called from another macro..."
+		Stop		   "_AbsDiff macro must be called from another macro..."
+	End
+	Set $abs = 0
+	If $1 > $2
+		Calc $abs = $1 - $2
+	Else
+		Calc $abs = $2 - $1
+	End
+	Calc $3 = $abs
+ENDMACRO
+
+MACRO _AddTextBlock
+	StrWrite $log, "_AddTextBlock Macro - Is Combo Rot = %.0n, Text in Oposite Corner = %s", $1, $2
+	LogMessage 0, $log
+	# Add Text Block to CPT and laser cut or engrave layers
+    # $1 - $comboRot,
+    # $2 - $cmtAddTextInOpositeCorner
+    If $$CALLDEPTH > 0
+        Set $comboRot = $1
+        StrSet $cmtAddTextInOpositeCorner, $2
+    End
+	StrCmp $gTextMode, "Marked"
+	If $$STATUS == 0
+		StrSet $font, $gFontM # Tahoma
+		Set $Height 	= 0.20
+		Set $Width 		= 0.10
+		Set $LineSpace 	= 1.00
+		Set $CharSpace 	= 1.00
+	End
+	StrLoc $gTextMode, "Engraved"
+	If $$STATUS > 0
+		StrSet $font, $gFontE # Stroke-Stencil
+		Set $Height 	= 0.20
+		Set $Width 		= 0.10
+		Set $LineSpace 	= 1.00
+		Set $CharSpace 	= 1.00
+	End
+	StrCmp $gTextMode, "Label"
+	If $$STATUS == 0
+		StrSet $font, $gFontE # Stroke-Stencil
+		Set $Height 	= 0.20
+		Set $Width 		= 0.10
+		Set $LineSpace 	= 1.00
+		Set $CharSpace 	= 1.00
+	End
+	StrCmp $gTextMode, "Cut-Thru"
+	If $$STATUS == 0
+		StrSet $font, $gFontC # Stroke-Stencil
+		Set $Height 	= 0.20
+		Set $Width 		= 0.10
+		Set $LineSpace 	= 1.00
+		Set $CharSpace 	= 1.00
+	End
+	StrSet $cfont, $gFontC
+	Set $dcode  = 10
+	Set $cDcode = 10
+	GetFreeDcode $dcode
+	GetDcodeInfo $dcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	Set $tempx = .01
+	PutDcodeInfo $dcode, $$ROUND, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	CurrentDcode $dcode
+	# Split the design name into its components
+	SplitPath $$DSNNAME, $dir, $tmp, $ext
+	# Create the full path for the top text block file
+	StrWrite $fp, "%s\\TextBlock.txt", $dir
+	# Create the full path for the bottom text block file
+	StrWrite $fpb, "%s\\TextBlockB.txt", $dir
+	SelectFilter
+		Dcode 	 0
+		Polarity 0
+	End
+	CALLMACRO CPVis
+	ActiveLayer $gTxtT
+	Layern $gTxtT
+		Visibility $$YES
+	End
+	Set $Rot = 0
+    If $gCADmatic
+        Set $editTextBlock = $$NO
+    Else
+		GetYesNo "Would you like to edit the standard Text Block?", $editTextBlock
+	End
+	If $editTextBlock == $$YES
+		CALLMACRO _TextEdit, $fp, $fpb
+		FileOpen  $fid, $fp, "a"
+			FileWrite $fid, " "
+		FileClose $fid
+		FileOpen  $fid, $fpb, "a"
+			FileWrite $fid, " "
+		FileClose $fid
+		GetValue "Text Rotation:", $Rot
+	End
+	Set $textOffsetX = 0
+	Set $textOffsetY = 0
+	CALLMACRO _GetDefaultTextPosition
+	GetDesignProperty "textOffset", $textOffset
+	StrRead $textOffset, "%n,%n", $textOffsetX, $textOffsetY
+	Text
+		Height 	  $Height
+		Width  	  $Width
+		Mirror    $$NO
+		Rotate 	  $Rot
+		LineSpace $LineSpace
+		CharSpace $CharSpace
+		Font 	  $font
+		File 	  $fp
+		Go $textOffsetX, $textOffsetY
+	End
+	ViewAll
+	If $gCADmatic
+		Set $moveTextBlock = $$NO
+	Else
+		GetYesNo "Would you like to move the text block?", $moveTextBlock
+	End
+	If $moveTextBlock == $$YES
+		Set $gMoveTextBlock = $$YES
+		SelectFilter
+			RemoveTypes 0
+		End
+		Move
+			By 		$$ITEMMODE
+			Layer 	$gTxtT
+			ToLayer $gTxtT
+			Text  	$$YES
+			Go
+		End
+	End
+	GetFirstItem $gTxtT, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	Repeat $$STATUS == $$TRUE
+		If $type == $$DBTEXT
+			If $gPasteLayers == 2
+				Copy
+					By 	    $$ITEMMODE
+					Layer   $gTxtT
+					ToLayer $gCheckPlotB
+					Text  	$$YES
+					InPlace $$YES
+					Go $x,$y
+				End
+				Move
+					By      $$ITEMMODE
+					Layer   $gTxtT
+					ToLayer $gTxtB
+					Text    $$YES
+					InPlace $$YES
+					Go $x,$y
+				End
+			Else
+				Copy
+					By      $$ITEMMODE
+					Layer   $gTxtT
+					ToLayer $gCheckPlotT
+					Text    $$YES
+					InPlace $$YES
+					Go $x,$y
+				End
+			End
+			If $gPasteLayers == 3
+				If $gComboYesNo == $$NO
+					ActiveLayer $gTxtB
+					Text
+						Height $Height
+						Width  $Width
+						Font   $font
+						File   $fpb
+						Go $x,$y
+					End
+					Copy
+						By      $$ITEMMODE
+						Layer   $gTxtB
+						ToLayer $gCheckPlotB
+						Text    $$YES
+						InPlace $$YES
+						Go $x,$y
+					End
+				Else # Is Combo
+					If $gCADmatic
+                        StrCmp $cmtAddTextInOpositeCorner, "Yes"
+                        If $$STATUS == 0
+                            Set $ComboBotText = $$YES
+                        Else
+                            Set $ComboBotText = $$NO
+                        End
+					Else
+						GetYesNo "Would you like to add Bottom side text in opposite corner?", $ComboBotText
+					End
+					If $ComboBotText == $$YES
+						ActiveLayer $gTxtB
+						GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy
+						Text
+							Height	$Height
+							Width	$Width
+							Font 	$font
+							File 	$fpb
+							Go $x,$y
+						End
+						Rotate
+						Degrees 	180
+						Centered 	$$NO
+						By 			$$WINDOWMODE
+						Boundary 	$$YES
+						Flashes 	$$NO
+						Draws 		$$NO
+						Arcs 		$$NO
+						Polys 		$$NO
+						Text 		$$YES
+						Layer 		$gTxtB
+						Dcode 		0 # Mirror all D-codes
+						Go $lx,$ly, $ux,$uy, 0,0
+						End
+						Copy
+							By       $$WINDOWMODE
+							Boundary $$YES
+							Flashes  $$NO
+							Draws    $$NO
+							Arcs     $$NO
+							Polys    $$NO
+							Text     $$YES
+							Layer    $gTxtB
+							ToLayer  $gCheckPlotT
+							Dcode	 0 # Mirror all D-codes
+							Go $lx,$ly, $ux,$uy, 0,0, 0,0
+						End
+						Move
+							By       $$WINDOWMODE
+							Boundary $$YES
+							Flashes  $$NO
+							Draws    $$NO
+							Arcs     $$NO
+							Polys    $$NO
+							Text     $$YES
+							Layer    $gTxtB
+							ToLayer  $gTxtT
+							Dcode	 0 # Mirror all D-codes
+							Go $lx,$ly, $ux,$uy, 0,0, 0,0
+						End
+					End
+				End
+			End
+		End
+		Set $$STATUS = $$FALSE
+	Else
+		GetNextItem
+	End
+	# CUT Text If NEEDED
+	GetFreeDcode $cDcode
+	GetDcodeInfo $cDcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	Set $tempx = .003
+	PutDcodeInfo $cDcode, $$ROUND, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	CurrentDcode $cDcode
+	If $gPasteLayers == 2
+		StrCmp $gTextMode, "Cut-Thru"
+		If $$STATUS == 0
+			ActiveLayer $gTxtOut20B
+			Text
+				Height	$Height
+				Width	$Width
+				Font	$cfont
+				File	$fp
+				Go $x,$y
+			End
+		End
+	Else
+		StrCmp $gTextMode, "Cut-Thru"
+		If $$STATUS == 0
+			ActiveLayer $gTxtOut20T
+			Text
+				Height	$Height
+				Width	$Width
+				Font	$cfont
+				File	$fp
+				Go $x,$y
+			End
+			If $gPasteLayers == 3
+				If $gComboYesNo == $$NO
+					ActiveLayer $gTxtOut20B
+					Text
+						Height	$Height
+						Width	$Width
+						Font	$cfont
+						File	$fpb
+						Go $x,$y
+					End
+				Else # add Bottom Side text to upper right corner of top cut layer
+					If $ComboBotText == $$YES
+						ActiveLayer $gTxtOut20B
+						GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy
+						Text
+							Height	  $Height
+							Width	  $Width
+							LineSpace $LineSpace
+							CharSpace $CharSpace
+							Font      $cfont
+							File      $fpb
+							Go $x,$y
+						End
+						Rotate
+							Degrees  180
+							Centered $$NO
+							By       $$WINDOWMODE
+							Boundary $$YES
+							Flashes  $$NO
+							Draws    $$NO
+							Arcs     $$NO
+							Polys    $$NO
+							Text     $$YES
+							Layer    $gTxtOut20B
+							Dcode	 0 # Mirror all D-codes
+							Go $lx,$ly, $ux,$uy, 0,0
+						End
+						Move
+							By       $$WINDOWMODE
+							Boundary $$YES
+							Flashes  $$NO
+							Draws    $$NO
+							Arcs     $$NO
+							Polys    $$NO
+							Text     $$YES
+							Layer    $gTxtOut20B
+							ToLayer  $gTxtOut20T
+							Dcode	 0 # Mirror all D-codes
+							Go $lx,$ly, $ux,$uy, 0,0, 0,0
+						End
+						CurrentDcode $dcode
+						ActiveLayer $gTxtB
+						Text
+							Height	  $Height
+							Width	  $Width
+							Rotate    $Rot
+							LineSpace $LineSpace
+							CharSpace $CharSpace
+							Font      $font
+							File      $fpb
+							Go $x,$y
+						End
+						Rotate
+							Degrees  180
+							Centered $$NO
+							By       $$WINDOWMODE
+							Boundary $$YES
+							Flashes  $$NO
+							Draws    $$NO
+							Arcs     $$NO
+							Polys    $$NO
+							Text     $$YES
+							Layer    $gTxtB
+							Dcode 	 0 # Mirror all D-codes
+							Go $lx,$ly, $ux,$uy, 0,0
+						End
+						Move
+							By       $$WINDOWMODE
+							Boundary $$YES
+							Flashes  $$NO
+							Draws    $$NO
+							Arcs     $$NO
+							Polys    $$NO
+							Text     $$YES
+							Layer    $gTxtB
+							ToLayer  $gCheckPlotT
+							Dcode 	 0 # Mirror all D-codes
+							Go $lx,$ly, $ux,$uy, 0,0, 0,0
+						End
+					End
+				End
+			End
+		End
+	End
+	If $comboRot == $$YES # Top on Top or Top on Right (Rotate 180)
+		GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy
+		Calc $ly = $ly + 3.5
+		Rotate
+			Degrees  180
+			Centered $$NO
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$NO
+			Arcs     $$NO
+			Polys    $$NO
+			Text     $$YES
+			Layer    $gTxtT
+			Dcode    0 # Mirror all D-codes
+			Go $lx,$ly, $ux,$uy, 0,0
+		End
+		Rotate
+			Degrees  180
+			Centered $$NO
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$NO
+			Arcs     $$NO
+			Polys    $$NO
+			Text     $$YES
+			Layer    $gCheckPlotT
+			Dcode    0 # Mirror all D-codes
+			Go $lx,$ly, $ux,$uy, 0,0
+		End
+		Rotate
+			Degrees  180
+			Centered $$NO
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$NO
+			Arcs     $$NO
+			Polys    $$NO
+			Text     $$YES
+			Layer    $gTxtOut20T
+			Dcode    0 # Mirror all D-codes
+			Go $lx,$ly, $ux,$uy, 0,0
+		End
+	End
+	StrCmp $gTextMode, "Cut-Thru"
+	If $$STATUS == 0
+		DeleteLayer $gTxtT
+		DeleteLayer $gTxtB
+	End
+	CALLMACRO CPVis
+ENDMACRO
+
+MACRO _BorderCheck
+    StrWrite $log, "_BorderCheck Macro Called %s", $$TIME
+    LogMessage 0, $log
+	If $gPasteLayers == 1
+		GetFirstItem $gBorderT, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		If $$STATUS == $$FALSE
+			StrWrite $log, "Missing Border Layer. The checkplot process requires a border on layer %.0n", $gBorderT
+			LogMessage 0, $log
+			Stop $log
+		End
+	End
+	If $gPasteLayers == 2
+		GetFirstItem $gBorderB, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		If $$STATUS == $$FALSE
+			StrWrite $log, "Missing Border Layer. The checkplot process requires a border on layer %.0n", $gBorderB
+			LogMessage 0, $log
+			Stop $log
+		End
+	End
+	If $gPasteLayers == 3
+		GetFirstItem $gBorderT, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		If $$STATUS == $$FALSE
+			StrWrite $log, "Missing Border Layer. The checkplot process requires a border on layer %.0n & %.0n", $gBorderT, $gBorderB
+			LogMessage 0, $log
+			Stop $log
+		End
+		GetFirstItem $gBorderB, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		If $$STATUS == $$FALSE
+			StrWrite $log, "Missing Border Layer. The checkplot process requires a border on layer %.0n & %.0n", $gBorderT, $gBorderB
+			LogMessage 0, $log
+			Stop $log
+		End
+	End
+ENDMACRO
+
+MACRO _Combo
+    StrWrite $log, "_Combo Macro Called %s", $$TIME
+    LogMessage 0, $log
+    If $$CALLDEPTH > 0
+        Set $offset     = $1 # numvar, Inches
+        StrSet $combo,    $2 # string, "Custom Combo", "Board to Board Spacing"
+        Set $engCrop    = $3 # -1 Never changed
+        Set $comboRot   = $4 # $$YES|NO
+        Set $MirrorVert = $5 # $$YES|NO
+        Set $orientation = $6 # numvar, 0 = null, 1 = Above Below, 2 = Side by Side
+		StrSet $cmtCornerMarks, $7
+        StrSet $cmtRotateBottomImage, $8 # Yes,No
+		Set $comboOrientation = $9 # numvar, 0 = null, 1 = BottomOnTop, 2 = TopOnTop
+		StrWrite $log, "Offset: %n, Combo: %s, EngCrop: %n, comboRot: %n, MirrorVert: %n, orientation: %n, cmtCornerMarks: %s, cmtRotateBottomImage: %s", $offset, $combo, $engCrop, $comboRot, $MirrorVert, $orientation, $cmtCornerMarks, $cmtRotateBottomImage
+		LogMessage 0, $log
+	Else
+        Set $offset     =  1
+        StrSet $combo,  "Board to Board Spacing"
+        Set $engCrop    = -1
+        Set $comboRot   = $$NO
+        Set $MirrorVert = $$NO
+		Set $orientation = 0
+		StrSet $cmtCornerMarks, ""
+    End
+	Set $formId = -1
+	Set $Static = -1
+	Set $Radio  = -1
+	Set $choice =  1
+	StrArray $orientAry(2)
+		StrSet $orientAry(1), "Above Below"
+		StrSet $orientAry(2), "Side by Side"
+	If $orientation > 0
+		Set $choice = $orientation
+	Else
+		DefineForm
+			FormId $formId
+			Title "Combo Orientation:"
+			Margin               0.5
+			StaticText           $Static, 0.5, 0.5, 3, 0.5, "Choose combo then press enter", $$FALSE
+			RadioButtonControls  $Radio,  0.5, 1.0, 3, 1.0, 2, $orientAry, $choice, $$FALSE, $$FALSE
+		End
+		OpenForm $formId
+	End
+	StrCmp $orientAry($choice), "Above Below"
+	If $$STATUS == 0
+		Set $Vert = $$YES
+	Else
+		Set $Vert = $$NO
+	End
+	SelectFilter
+		Dcode 0
+		Polarity 0
+	End
+	CALLMACRO CPVis
+	GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy, $$NO
+	Set $height  = $uy 	   * 2
+	Set $hheight = $height / 2
+	Set $wide    = $ux 	   * 2
+	Set $hwide   = $wide   / 2
+	Set $ctrX    = 0
+	Set $ctrY    = 0
+	Set $Ox      = 0
+	Set $Oy      = 0
+	StrCmp $combo, "Board to Board Spacing"
+	if $$STATUS == 0
+		Calc $offset = $offset / 2
+		GetExtents $gBorderT, $lx,$ly, $ux,$uy, $$NO
+		If $Vert == $$YES
+			Calc $h = $uy - $ly
+			Calc $h = $h/2
+			Set $nhheight  = 0 - $h
+			Calc $Oy = $nhheight - $offset
+		Else
+			Calc $h = $ux - $lx
+			Calc $h = $h/2
+			Set $nhwide  = 0 - $h
+			Calc $Ox = $nhwide - $offset
+		End
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Border
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderT
+			ToLayer  $gSizePlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Laser
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteT
+			ToLayer  $gCutT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Fid
+		CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveT, $engCrop, $cmtCornerMarks
+		Move
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Draws    $$YES
+			Layer    $gEngraveT
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Layer    $gFidT
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By $$WINDOWMODE
+			Layer    $gFidT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Do Bottom
+		# Set $hheight  = 0 - $hheight
+		GetExtents $gBorderB, $lx,$ly, $ux,$uy, $$NO
+		If $Vert == $$YES
+			Calc $h  = $uy - $ly
+			Calc $h  = $h/2
+			Calc $Oy = $h + $offset
+		Else
+			Calc $h  = $ux - $lx
+			Calc $h  = $h/2
+			Calc $Ox = $h + $offset
+		End
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteB
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, 0,0, $Ox,$Oy
+		End
+		# Copy Border
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderB
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderB
+			ToLayer  $gSizePlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Laser
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Layer    $gModPasteB
+			ToLayer  $gCutT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Fid
+		CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveB, $engCrop, $cmtCornerMarks
+		Move
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Draws    $$YES
+			Layer    $gEngraveB
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By $$WINDOWMODE
+			Flashes  $$YES
+			Layer    $gFidB
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By $$WINDOWMODE
+			Layer    $gFidB
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Calc $offset = $offset * 2
+	Else
+		StrCmp $combo, "Combo even spacing"
+		if $$STATUS == 0
+			Calc $hheight = $hheight - 1.5
+			Calc $hwide   = $hwide   - 1.5
+			GetExtents $gBorderT, $lx,$ly, $ux,$uy, $$NO
+			If $Vert == $$YES
+				Calc $h = $uy - $ly
+				Calc $h = $h/2
+				Calc $offset   = $hheight + $h
+				Calc $offset   = $offset/2
+				Set  $nhheight = 0 - $hheight
+				Calc $Oy = $nhheight + $offset
+			Else
+				Calc $h = $ux - $lx
+				Calc $h = $h/2
+				Calc $offset = $hwide + $h
+				Calc $offset = $offset/2
+				Set  $nhwide = 0 - $hwide
+				Calc $Ox = $nhwide + $offset
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Layer    $gModPasteT
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Border
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gBorderT
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gBorderT
+				ToLayer  $gSizePlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Laser
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Layer    $gModPasteT
+				ToLayer  $gCutT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Fid
+			CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveT, $engCrop, $cmtCornerMarks
+			Move
+				By $$WINDOWMODE
+				Boundary $$YES
+				Draws    $$YES
+				Flashes  $$YES
+				Layer    $gEngraveT
+				ToLayer  $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+
+			Copy
+				By $$WINDOWMODE
+				Flashes $$YES
+				Layer 	$gFidT
+				ToLayer $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Layer 	$gFidT
+				ToLayer $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Do Bottom
+			# Set $hheight  = 0 - $hheight
+			GetExtents $gBorderB, $lx,$ly, $ux,$uy, $$NO
+			If $Vert == $$YES
+				Calc $h = $uy - $ly
+				Calc $h = $h/2
+				Calc $offset = $hheight + $h
+				Calc $offset = $offset/2
+				Set  $Oy = 0
+				Calc $Oy = $hheight - $offset
+			Else
+				Calc $h = $ux - $lx
+				Calc $h = $h/2
+				Calc $offset = $hwide + $h
+				Calc $offset = $offset/2
+				Set  $Ox = 0
+				Calc $Ox = $hwide - $offset
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Layer    $gModPasteB
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, 0,0, $Ox,$Oy
+			End
+			# Copy Border
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gBorderB
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gBorderB
+				ToLayer  $gSizePlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Laser
+			Copy
+				By $$WINDOWMODE
+				Flashes $$YES
+				Layer	$gModPasteB
+				ToLayer $gCutT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Fid
+			CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveB, $engCrop, $cmtCornerMarks
+			Move
+				By $$WINDOWMODE
+				Boundary $$YES
+				Draws    $$YES
+				Flashes  $$YES
+				Layer    $gEngraveB
+				ToLayer  $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+
+			Copy
+				By $$WINDOWMODE
+				Flashes $$YES
+				Layer 	$gFidB
+				ToLayer $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Layer 	$gFidB
+				ToLayer $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Set $offset = $Oy + $h
+		Else
+			GetExtents $gBorderT, $lx,$ly, $ux,$uy, $$NO
+			If $Vert == $$YES
+				Calc $h = $uy - $ly
+				Calc $h = $h /2
+				Set  $nhheight = 0 - $hheight
+				Calc $Oy = $nhheight + $h
+				Calc $Oy = $Oy + $offset
+			Else
+				Calc $h = $ux - $lx
+				Calc $h = $h/2
+				Set  $nhwide = 0 - $hwide
+				Calc $Ox = $nhwide + $h
+				Calc $Ox = $Ox + $offset
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Layer    $gModPasteT
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Border
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gBorderT
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gBorderT
+				ToLayer  $gSizePlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Laser
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Layer    $gModPasteT
+				ToLayer  $gCutT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Fid
+			CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveT,  $engCrop, $cmtCornerMarks
+			Move
+				By $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Layer    $gEngraveT
+				ToLayer  $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Flashes  $$YES
+				Layer    $gFidT
+				ToLayer  $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By $$WINDOWMODE
+				Layer    $gFidT
+				ToLayer  $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Do Bottom
+			# Set $hheight  = 0 - $hheight
+			Set $Oy = 0
+			Set $Ox = 0
+			GetExtents $gBorderB, $lx,$ly, $ux,$uy, $$NO
+			If $Vert == $$YES
+				Calc $h = $uy - $ly
+				Calc $h = $h /2
+				Calc $Oy = $hheight - $h
+				Calc $Oy = $Oy - $offset
+			Else
+				Calc $h = $ux - $lx
+				Calc $h = $h/2
+				Calc $Ox = $hwide - $h
+				Calc $Ox = $Ox - $offset
+			End
+			Copy
+				By        $$WINDOWMODE
+				Flashes   $$YES
+				Draws     $$YES
+				Arcs      $$YES
+				Layer     $gModPasteB
+				ToLayer   $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Border
+			Copy
+				By        $$WINDOWMODE
+				Flashes   $$YES
+				Draws     $$YES
+				Arcs      $$YES
+				Polys     $$YES
+				Layer     $gBorderB
+				ToLayer   $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By        $$WINDOWMODE
+				Flashes   $$YES
+				Draws     $$YES
+				Arcs      $$YES
+				Polys     $$YES
+				Layer     $gBorderB
+				ToLayer   $gSizePlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Laser
+			Copy
+				By        $$WINDOWMODE
+				Flashes   $$YES
+				Layer     $gModPasteB
+				ToLayer   $gCutT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			# Copy Fid
+			CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveB, $engCrop, $cmtCornerMarks
+			Move
+				By        $$WINDOWMODE
+				Boundary  $$YES
+				Flashes   $$YES
+				Layer     $gEngraveB
+				ToLayer   $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By        $$WINDOWMODE
+				Flashes   $$YES
+				Layer     $gFidB
+				ToLayer   $gEngraveT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+			Copy
+				By        $$WINDOWMODE
+				Layer     $gFidB
+				ToLayer   $gCheckPlotT
+				Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+			End
+		End
+	End
+	If $Vert == $$YES
+		StrCmp $cmtRotateBottomImage, "Yes"
+		If $$STATUS == 0
+			Set $Rot = $$YES
+		End
+		StrCmp $cmtRotateBottomImage,, "No"
+		If $$STATUS == 0
+			Set $Rot = $$NO
+		End
+		If $gCADmatic
+			# CADmatic does not need this prompt
+		Else
+			GetYesNo "Rotate Bottom Image?", $Rot
+		End
+		If $Rot == $$YES
+			# Rotate Bottom 180
+			# $lx,$ly, $ux,$uy
+			Calc $ly = $ly + $Oy
+			Calc $uy = $uy + $Oy
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gCheckPlotT
+				Dcode 	 0
+				Go       $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+			Rotate
+				Degrees  180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gCutT
+				Dcode 	 0
+				Go       $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gEngraveT
+				Dcode 	 0
+				Go       $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer 	 $gSizePlotT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+		End
+		Set $formId = -1
+		Set $Static = -1
+		Set $Radio  = -1
+		Set $choice = 1
+		StrArray $orientAryTB(2)
+			StrSet $orientAryTB(1), "Bottom on Top"
+			StrSet $orientAryTB(2), "Top on Top"
+		If $orientation > 0
+			Set $choice = $orientation
+		Else
+			DefineForm
+				FormId $formId
+				Title "Choose Top and Bottom Orientation:"
+				Margin               0.5
+				StaticText           $Static, 0.5, 0.5, 3, 0.5, "Choose combo then press enter", $$FALSE
+				RadioButtonControls  $Radio,  0.5, 1.0, 3, 1.0, 2, $orientAryTB, $choice, $$FALSE, $$FALSE
+			End
+			OpenForm $formId
+		End
+		StrCmp $orientAryTB($choice), "Top on Top"
+		If $$STATUS == 0
+			Set  $comboRot = $$YES
+			GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy, $$NO
+			Calc $uy = $uy - 1.5
+			Calc $ux = $ux - 1.5
+			Calc $lx = 0 -$ux
+			Calc $ly = 0 -$uy
+			Rotate
+				Degrees  180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer    $gCheckPlotT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+			Rotate
+				Degrees  180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer    $gCutT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+			Rotate
+				Degrees  180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer    $gEngraveT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+			Rotate
+				Degrees  180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer 	 $gSizePlotT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+		End
+	Else
+		StrCmp $cmtRotateBottomImage, "Yes"
+		If $$STATUS == 0
+			Set $Rot = $$YES
+		End
+		StrCmp $cmtRotateBottomImage, "No"
+		If $$STATUS == 0
+			Set $Rot = $$NO
+		End
+		If $gCADmatic
+			# CADmatic does not need this prompt
+		Else
+			GetYesNo "Rotate Bottom Image?", $Rot
+		End
+		If $Rot == $$YES
+			# Rotate Bottom 180
+			# $lx,$ly, $ux,$uy
+			Calc $lx = $lx + $Ox
+			Calc $ux = $ux + $Ox
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gCheckPlotT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gCutT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Layer    $gEngraveT
+				Dcode	 0
+				Go $lx,$ly, $ux,$uy, $Ox,$Oy
+			End
+		End
+		Set $formId = -1
+		Set $Static = -1
+		Set $Radio  = -1
+		Set $choice = 1
+		StrArray $orientAryLR(2)
+			StrSet $orientAryLR(1), "Top on Left"
+			StrSet $orientAryLR(2), "Bottom on Left"
+		If $orientation > 0
+			Set $choice = $orientation
+		Else
+			DefineForm
+				FormId $formId
+				Title "Choose Top and Bottom Orientation:"
+				Margin               0.5
+				StaticText           $Static, 0.5, 0.5, 3, 0.5, "Choose combo then press enter", $$FALSE
+				RadioButtonControls  $Radio,  0.5, 1.0, 3, 1.0, 2, $orientAryLR, $choice, $$FALSE, $$FALSE
+			End
+			OpenForm $formId
+		End
+		StrCmp $orientAryLR($choice), "Bottom on Left"
+		If $$STATUS == 0
+			Set  $comboRot = $$YES
+			Set  $MirrorVert = $$YES
+			GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy, $$NO
+			Calc $uy = $uy - 1.5
+			Calc $ux = $ux - 1.5
+			Calc $lx = 0 -$ux
+			Calc $ly = 0 -$uy
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer    $gCheckPlotT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer    $gCutT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+			Rotate
+				Degrees 180.0
+				Centered $$NO
+				By       $$WINDOWMODE
+				Boundary $$YES
+				Flashes  $$YES
+				Draws    $$YES
+				Arcs     $$YES
+				Polys    $$YES
+				Text     $$NO
+				Layer    $gEngraveT
+				Dcode 	 0
+				Go $lx,$ly, $ux,$uy, 0,0
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _CheckPlotLayerNames
+    StrWrite $log, "_CheckPlotLayerNames Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $PasteLayers, $comboyesNo
+	If $gPasteLayers == 2
+		GetLayer $gCheckPlotB,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+		StrWrite $cpbname, "%s_CheckPlot_Bot_", $gJobNumT
+		Layern $gCheckPlotB
+			LyrName $cpbname
+		End
+	Else
+		GetLayer $gCheckPlotT,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+		StrWrite $cptname, "%s_CheckPlot_Top_", $gJobNumT
+		Layern $gCheckPlotT
+			LyrName $cptname
+		End
+		If $gComboYesNo == $$NO
+			StrWrite $cpbname, "%s_CheckPlot_Bot_", $gJobNumB
+			Layern $gCheckPlotB
+				LyrName $cpbname
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _CheckPlotNames
+    StrWrite $log, "_CheckPlotNames Macro Called %s", $$TIME
+    LogMessage 0, $log
+	StrSet $PartNumT, $gPartNumT
+	StrSet $PartNumB, $gPartNumB
+	StrCmp $gCPTName, ""
+	If $$STATUS == 0
+		CALLMACRO _ReplaceIllegalChars, $PartNumT
+		StrWrite $gCPTName, "%s_STEN_%s", $PartNumT, $gJobNumT
+		If $gPasteLayers == 3
+			If $gComboYesNo == $$NO
+				StrCat $gCPTName, "_Top"
+			End
+		End
+		StrCat $gCPTName, ".gbr"
+	End
+	StrCmp $gCPBName, ""
+	If $$STATUS == 0
+		CALLMACRO _ReplaceIllegalChars, $PartNumB
+		If $gPasteLayers == 2
+			StrWrite $gCPBName, $PartNumT
+		Else
+			StrWrite $gCPBName, $PartNumB
+		End
+		StrCat $gCPBName, "_STEN_"
+		StrCat $gCPBName, $gJobNumB
+		If $gPasteLayers == 3
+			If $gComboYesNo == $$NO
+				StrCat $gCPBName, "_Bot"
+			End
+		End
+		StrCat $gCPBName, ".gbr"
+	End
+ENDMACRO
+
+MACRO _CenterbyBorder
+    StrWrite $log, "_CenterbyBorder Macro Called %s, Border Layer 1 = %.0n", $$TIME, $1
+    LogMessage 0, $log
+	# get current sketch view type
+	# set to outline
+	Set $ctrX = 0
+	Set $ctrY = 0
+	CALLMACRO _GetCenter, $1, $ctrX,$ctrY
+	PutDesignProperty "ctrX:", $ctrX, 1
+	PutDesignProperty "ctrY:", $ctrY, 1
+	GetExtents -1, $lx,$ly, $ux,$uy
+	CALLMACRO AllVisible
+	Move
+		By $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$YES
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		Layer 		 0
+		Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, 0,0
+	End
+	# return to original sketch type.
+ENDMACRO
+
+MACRO _CheckCombo
+    StrWrite $log, "_CheckCombo Macro Called %s", $$TIME
+    LogMessage 0, $log
+    IsEmptyLayer $gCheckPlotT
+	If $$STATUS == $$FALSE
+		Set $1 = $$YES
+	End
+	IsEmptyLayer $gCheckPlotB
+	If $$STATUS == $$FALSE
+		Set $1 = $$NO
+	End
+ENDMACRO
+
+MACRO _CleanModified
+    StrWrite $log, "_CleanModified Macro Called %s", $$TIME
+    LogMessage 0, $log
+	If $gPasteLayers == 1
+		GetExtents $gModPasteT, $lx,$ly, $ux,$uy, 0,0
+		Erase
+			By   $$WINDOWMODE
+			Boundary    $$YES
+			RemoveTypes 0
+			Flashes     $$NO
+			Draws       $$YES
+			Arcs        $$YES
+			Drills      $$YES
+			Polys       $$YES
+			Slots       $$YES
+			Layer       $gModPasteT
+			Dcode       0 # Erase all D-codes
+			Tool        0 # Erase all tools
+			Polarity    0
+			Go $lx,$ly, $ux,$uy
+		End
+		GetFirstItem $gFidT, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		Repeat $$STATUS == $$TRUE
+			# ZoomIn $x,$y
+			Erase
+				By  $$ITEMMODE
+				Flashes  $$YES
+				Layer 	 $gModPasteT
+				Dcode 	 $dcode # Erase Fid D-code
+				Tool 	 0 # Erase all tools
+				Polarity 0
+				Go $x,$y
+			End
+			GetNextItem
+		End
+
+	End
+	If $gPasteLayers >= 2
+		GetExtents $gModPasteB, $lx,$ly, $ux,$uy, 0,0
+		Erase
+			By   $$WINDOWMODE
+			Boundary    $$YES
+			RemoveTypes 0
+			Flashes     $$NO
+			Draws       $$YES
+			Polys       $$YES
+			Arcs        $$YES
+			Drills      $$YES
+			Slots       $$YES
+			Layer       $gModPasteB
+			Dcode       0 # Erase all D-codes
+			Tool        0 # Erase all tools
+			Polarity    0
+			Go $lx,$ly, $ux,$uy
+		End
+		GetFirstItem $gFidB, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		Repeat $$STATUS == $$TRUE
+			# ZoomIn $x,$y
+			Erase
+				By  $$ITEMMODE
+				Flashes  $$YES
+				Layer 	 $gModPasteB
+				Dcode 	 $dcode # Erase fid D-code
+				Tool	 0 # Erase all tools
+				Polarity 0
+				Go $x,$y
+			End
+			GetNextItem
+		End
+
+	End
+	If $gPasteLayers == 3
+		GetExtents $gModPasteT, $lx,$ly, $ux,$uy, 0,0
+		Erase
+			By   $$WINDOWMODE
+			Boundary    $$YES
+			RemoveTypes 0
+			Flashes     $$NO
+			Draws       $$YES
+			Polys       $$YES
+			Arcs        $$YES
+			Drills      $$YES
+			Slots       $$YES
+			Layer       $gModPasteT
+			Dcode       0 # Erase all D-codes
+			Tool        0 # Erase all tools
+			Polarity    0
+			Go $lx,$ly, $ux,$uy
+		End
+		GetFirstItem $gFidT, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+		Repeat $$STATUS == $$TRUE
+			# ZoomIn $x,$y
+			Erase
+				By  $$ITEMMODE
+				Flashes  $$YES
+				Layer    $gModPasteT
+				Dcode    $dcode # Erase all D-codes
+				Tool     0 # Erase all tools
+				Polarity 0
+				Go $x,$y
+			End
+			GetNextItem
+		End
+	End
+	ViewAll
+ENDMACRO
+
+MACRO _ConvertText
+    StrWrite $log, "_ConvertText Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $dcode = 10
+	GetFreeDcode $dcode
+	GetDcodeInfo $dcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	Set $tempx = .003
+	PutDcodeInfo $dcode, $$ROUND, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	Composite2Layer
+		CompositeLayer $gTxtT
+		ToLayer        $gTxtT
+		Method         0 # Flatten
+		Go
+	End
+	Composite2Layer
+		CompositeLayer $gTxtB
+		ToLayer        $gTxtB
+		Method         0 # Flatten
+		Go
+	End
+	Raster2Vector
+		Layer          $gTxtT
+		Outset         $$YES
+		FillPattern    1
+		BorderDcode    $dcode
+		FillDcode      $dcode
+		FillStyle      0
+		Go
+	End
+	Raster2Vector
+		Layer          $gTxtB
+		Outset         $$YES
+		FillPattern    1
+		BorderDcode    $dcode
+		FillDcode      $dcode
+		FillStyle      0
+		Go
+	End
+ENDMACRO
+
+MACRO _CopyB
+    StrWrite $log, "_CopyB Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $1 = $offsetChoice
+	# $2 = $Offset
+	# $3 = $Offside, "Bottom(normal)", "Top", "Left", "Right"
+	# $4 = $engCrop
+	# $5 = $cmtCornerMarks
+	If $gCADmatic
+		StrSet $cmtCornerMarks, $5
+	Else
+		StrSet $cmtCornerMarks, ""
+	End
+	SelectFilter
+		Dcode 0
+		Polarity 0
+	End
+	CALLMACRO CPVis
+	GetExtents $gCheckPlotB, $lx,$ly, $ux,$uy, $$NO
+	Set $height = $uy
+	Set $width  = $ux
+	Set $ctrX   = 0
+	Set $ctrY   = 0
+	Set $Ox     = 0
+	Set $Oy     = 0
+	CALLMACRO _GetCenter, $gBorderB, $ctrX,$ctrY
+	GetExtents $gBorderB, $lx,$ly, $ux,$uy, $$NO
+	StrCmp $1, "Offset"
+	If $$STATUS == 0
+		Calc $h = $uy
+		StrCmp $3, "Bottom(normal)"
+		If $$STATUS == 0
+			Calc $Oy = $h - $height
+			Calc $Oy = $Oy + $2
+		End
+		StrCmp $3, "Top"
+		If $$STATUS == 0
+			Calc $Oy = $height - $h
+			Calc $Oy = $Oy - $2
+		End
+		Calc $w = $ux
+		StrCmp $3, "Left"
+		If $$STATUS == 0
+			Calc $Ox = $w - $width
+			Calc $Ox = $Ox + $2
+		End
+		StrCmp $3, "Right"
+		If $$STATUS == 0
+			Calc $Ox = $width - $w
+			Calc $Ox = $Ox - $2
+		End
+		Copy
+			By      $$WINDOWMODE
+			Flashes $$YES
+			Draws   $$YES
+			Arcs    $$YES
+			Layer   $gModPasteB
+			ToLayer $gCheckPlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Border
+		Copy
+			By      $$WINDOWMODE
+			Flashes $$YES
+			Draws   $$YES
+			Arcs    $$YES
+			Polys   $$YES
+			Layer   $gBorderB
+			ToLayer $gCheckPlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By      $$WINDOWMODE
+			Flashes $$YES
+			Draws   $$YES
+			Arcs    $$YES
+			Polys   $$YES
+			Layer   $gBorderB
+			ToLayer $gSizePlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Laser
+		Copy
+			By      $$WINDOWMODE
+			Flashes $$YES
+			Draws   $$YES
+			Arcs    $$YES
+			Layer   $gModPasteB
+			ToLayer $gCutB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Fid
+		CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveB, $4, $cmtCornerMarks
+		Move
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Layer    $gEngraveB
+			ToLayer  $gEngraveB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Layer    $gFidB
+			ToLayer  $gEngraveB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Layer    $gFidB
+			ToLayer  $gCheckPlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+	Else
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteB
+			ToLayer  $gCheckPlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Border
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderB
+			ToLayer  $gCheckPlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderB
+			ToLayer  $gSizePlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Laser
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteB
+			ToLayer  $gCutB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Fid
+		CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveB, $4, $cmtCornerMarks
+		Move
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Layer    $gEngraveB
+			ToLayer  $gEngraveB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Layer    $gFidB
+			ToLayer  $gEngraveB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Layer    $gFidB
+			ToLayer  $gCheckPlotB
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+	End
+ENDMACRO
+
+MACRO _CopyT
+    StrWrite $log, "_CopyT Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $1 = $offsetChoice
+	# $2 = $Offset
+	# $3 = $Offside, "Bottom(normal)", "Top", "Left", "Right"
+	# $4 = $engCrop
+	# $5 = $cmtCornerMarks
+	If $gCADmatic
+		StrSet $cmtCornerMarks, $5
+	Else
+		StrSet $cmtCornerMarks, ""
+	End
+	SelectFilter
+		Dcode 0
+		Polarity 0
+	End
+	CALLMACRO CPVis
+	GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy, $$NO
+	Set $height = $uy
+	Set $width  = $ux
+	Set $ctrX   = 0
+	Set $ctrY   = 0
+	Set $Ox     = 0
+	Set $Oy     = 0
+	CALLMACRO _GetCenter, $gBorderT, $ctrX,$ctrY
+	GetExtents $gBorderT, $lx,$ly, $ux,$uy, $$NO
+	StrCmp $1, "Offset"
+	If $$STATUS == 0
+		Calc $h = $uy
+		StrCmp $3, "Bottom(normal)"
+		if $$STATUS == 0
+			Calc $Oy = $h - $height
+			Calc $Oy = $Oy + $2
+		End
+		StrCmp $3, "Top"
+		if $$STATUS == 0
+			Calc $Oy = $height - $h
+			Calc $Oy = $Oy - $2
+		End
+		Calc $w = $ux
+		StrCmp $3, "Left"
+		if $$STATUS == 0
+			Calc $Ox = $w - $width
+			Calc $Ox = $Ox + $2
+		End
+		StrCmp $3, "Right"
+		if $$STATUS == 0
+			Calc $Ox = $width - $w
+			Calc $Ox = $Ox - $2
+		End
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Border
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderT
+			ToLayer  $gSizePlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Laser
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteT
+			ToLayer  $gCutT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Fid
+		CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveT, $4, $cmtCornerMarks
+		Move
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Layer    $gEngraveT
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+
+		Copy
+			By       $$WINDOWMODE
+			Layer    $gFidT
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Layer    $gFidT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+
+	Else
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Border
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Polys    $$YES
+			Layer    $gBorderT
+			ToLayer  $gSizePlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Laser
+		Copy
+			By       $$WINDOWMODE
+			Flashes  $$YES
+			Draws    $$YES
+			Arcs     $$YES
+			Layer    $gModPasteT
+			ToLayer  $gCutT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		# Copy Fid
+		CALLMACRO _engCrop, $lx,$ly, $ux,$uy, $gEngraveT, $4, $cmtCornerMarks
+		Move
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$YES
+			Layer    $gEngraveT
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+
+		Copy
+			By       $$WINDOWMODE
+			Layer    $gFidT
+			ToLayer  $gEngraveT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+		Copy
+			By       $$WINDOWMODE
+			Layer    $gFidT
+			ToLayer  $gCheckPlotT
+			Go $lx,$ly, $ux,$uy, $ctrX,$ctrY, $Ox,$Oy
+		End
+	End
+ENDMACRO
+
+MACRO _CreateTextBlocks
+    StrWrite $log, "_CreateTextBlocks Macro Called %s", $$TIME
+    LogMessage 0, $log
+	StrSet $dateISO, "Date Error"
+	CALLMACRO _GetISODate, $dateISO
+	# Create Text Block File
+	StrCmp $gPartNumT, ""
+	if $$STATUS == 0
+		GetString "Enter Customer Part #", $gPartNumT
+		# Check for spaces in gPartNum
+		StrLoc $gPartNumT, " "
+		Repeat $$STATUS > 0
+			GetString "Re-Enter Customer Part # (for top or single sided, No spaces allowed.): ", $gPartNumT
+			StrLoc $gPartNumT, " "
+		End
+	End
+	SplitPath $$DSNNAME, $dir, $gJobNumT, $ext
+	StrWrite  $1, "%s\\TextBlock.txt", $dir
+	FileOpen  $tbf, $1, "w"
+		FileWrite $tbf, "%s", 				$gCustomer
+		FileWrite $tbf, "P/N: %s", 			$gPartNumT
+		FileWrite $tbf, "Thk: %.1n mils", 	$gThickT
+		FileWrite $tbf, "Coating: %s", 		$gCoatT
+		FileWrite $tbf, "Stentech Job#: %s", 	$gJobNumT
+		FileWrite $tbf, "Date: %s",  		$dateISO
+	FileClose $tbf
+	If $gPasteLayers == 3
+		# Create Text Block File for Bottom
+		StrCmp $gPartNumB , ""
+		if $$STATUS == 0
+			StrSet $gPartNumB, $gPartNumT
+			GetString "Enter Customer Part # for Bottom Side:", $gPartNumB
+			PutDesignProperty "Bot PN:", $gPartNumB
+			# Check for spaces in gPartNumB
+			StrLoc $gPartNumB, " "
+			Repeat $$STATUS > 0
+				GetString "Re-Enter Customer Part # (for top or single sided, No spaces allowed.): ", $gPartNumB
+				StrLoc $gPartNumB, " "
+			End
+		End
+		StrWrite  $1, "%s\\TextBlockB.txt", $dir
+		FileOpen  $tbf,  $1, "w"
+			FileWrite $tbf, "%s", 				$gCustomer
+			FileWrite $tbf, "P/N: %s", 			$gPartNumB
+			FileWrite $tbf, "Thk: %.1n mils", 	$gThickB
+			FileWrite $tbf, "Coating: %s", 		$gCoatB
+			FileWrite $tbf, "Stentech Job#: %s", 	$gJobNumB
+			FileWrite $tbf, "Date: %s",  		$dateISO
+		FileClose $tbf
+	End
+ENDMACRO
+
+MACRO _FidInfo
+    StrWrite $log, "_FidInfo Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $PasteLayers, $comboyesNo, $NumFidT, $FidApT, $NumFidB, $FidApB
+	Set $cnt = 0
+	Set $cntB = 0
+	If $1 == 2 # Bot Only
+		Set $yesNo = $$NO
+		IsEmptyLayer $gFidB
+		If $$STATUS == $$YES
+			StrWrite $5, "0"
+			StrWrite $6, "N/A"
+		Else
+			GetFirstItem $gFidB, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+			Repeat $$STATUS != $$FALSE
+				If $$STATUS != $$FALSE
+					Set $apB = $dcode
+					Set $cntB = $cntB + 1
+				End
+				GetNextItem
+			End
+			StrWrite $5, "%1.0n", $cntB
+			If $cntB != 0
+				StrWrite $6, "%1.0n", $apB
+			End
+		End
+	Else
+		# Top
+		Set $yesNo = $$NO
+		IsEmptyLayer $gFidT
+		If $$STATUS == $$YES
+			StrWrite $3, "0"
+			StrWrite $4, "N/A"
+		Else
+			GetFirstItem $gFidT, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+			Repeat $$STATUS != $$FALSE
+				If $$STATUS != $$FALSE
+					Set $ap = $dcode
+					Set $cnt = $cnt + 1
+				End
+				GetNextItem
+			End
+			StrWrite $3, "%1.0n", $cnt
+			StrWrite $4, "%1.0n", $ap
+		End
+		If $1 == 3
+			If $2 == $$NO # GetBot
+				Set $yesNo = $$NO
+				IsEmptyLayer $gFidB
+				If $$STATUS == $$YES
+					StrWrite $5, "0"
+					StrWrite $6, "N/A"
+				Else
+					GetFirstItem $gFidB, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+					Repeat $$STATUS != $$FALSE
+						If $$STATUS != $$FALSE
+							Set $apB = $dcode
+							Set $cntB = $cntB + 1
+						End
+						GetNextItem
+					End
+					StrWrite $5, "%1.0n", $cntB
+					StrWrite $6, "%1.0n", $apB
+				End
+			Else
+				Set $yesNo = $$NO
+				IsEmptyLayer $gFidB
+				If $$STATUS == $$YES
+					StrWrite $3, "0"
+					StrWrite $4, "N/A"
+				Else
+					GetFirstItem $gFidB, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+					Repeat $$STATUS != $$FALSE
+						If $$STATUS != $$FALSE
+							Set $ap = $dcode
+							Set $cnt = $cnt + 1
+						End
+						GetNextItem
+					End
+					StrWrite $3, "%1.0n", $cnt
+					StrWrite $4, "%1.0n", $ap
+				End
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _FuzzyTest
+    StrWrite $log, "_FuzzyTest Macro Called %s", $$TIME
+    LogMessage 0, $log
+	If $$CALLDEPTH == 0
+		LogMessage 0, "_FuzzyTest macro must be called from another macro..."
+		Stop		  "_FuzzyTest macro must be called from another macro..."
+	End
+	Set $abs = 0
+	Set $fuzzy = .001
+	CALLMACRO _AbsDiff, $1, $2, $abs
+	If $abs < $fuzzy
+		Calc $3 = 1
+	Else
+		Calc $3 = 0
+	End
+ENDMACRO
+
+MACRO _GetQuadrant
+    StrWrite $log, "_GetQuadrant Macro Called %s", $$TIME
+    # LogMessage 0, $log
+	# $layer, $qnum $lx,$ly, $ux,$uy
+	GetExtents $1, $3, $4, $5, $6
+	Calc $width   = $5 - $3
+	Calc $centerX = $width / 2
+	Calc $height  = $6 - $4
+	Calc $centerY = $height / 2
+	If $2 == 1
+		Calc $lx = 0 - $centerX
+		Calc $ux = 0
+		Calc $ly = 0 - $centerY
+		Calc $uy = 0
+	End
+	If $2 == 2
+		Calc $lx = 0
+		Calc $ux = 0 + $centerX
+		Calc $ly = 0 - $centerY
+		Calc $uy = 0
+	End
+	If $2 == 3
+		Calc $lx = 0 - $centerX
+		Calc $ux = 0
+		Calc $ly = 0
+		Calc $uy = 0 + $centerY
+	End
+	If $2 == 4
+		Calc $lx = 0
+		Calc $ux = 0 + $centerX
+		Calc $ly = 0
+		Calc $uy = 0 + $centerY
+	End
+	GetTempLayer $tmp
+	Copy
+		By $$WINDOWMODE
+		Layer $1
+		ToLayer $tmp
+		Flashes $$YES
+		InPlace $$YES
+		Go $lx,$ly, $ux,$uy
+	End
+	Set $1 = $tmp
+	Set $3 = $lx
+	Set $4 = $ly
+	Set $5 = $ux
+	Set $6 = $uy
+ENDMACRO
+
+MACRO _GetBoardProfileLyr
+	StrWrite $log, "_GetBoardProfileLyr Macro Called %s, Variable 1 = %.0n", $$TIME, $1
+    LogMessage 0, $log
+	# CALLMacro BreakPoint, $1
+	Set $1 = 0
+	Set $Repeat = $$YES
+	Repeat $Repeat != $$NO
+		Calc $1 = $1 + 1
+		If $1 == $$MAXLAYERS
+			Set $Repeat = $$NO
+			Set $1 = 0
+		End
+		GetLayer $1,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+		If $type == $$LTBORDER
+			Set $Repeat = $$NO
+		End
+	End
+ENDMACRO
+
+MACRO _GetListLength
+    # CALLMACRO _PopulateArray #, $1 = $filename, $2 = $cnt, $3 = $readToken
+    # $1 = $filename
+    # $2 = $cnt
+    # $3 = $readToken
+    StrWrite $log, "_GetListLength Macro Called %s %s", $1, $$TIME
+    LogMessage 0, $log
+	StrSet $read, ""
+	FileOpen $fid, $1, "r"
+	Repeat $$STATUS != 0
+		FileRead $fid, $3, $read
+		If $$STATUS != 0
+			Calc $2 = $2 + 1
+		End
+	End
+	FileClose $fid
+ENDMACRO
+
+MACRO _GetCenter
+	StrWrite $log, "_GetCenter Macro Called %s, Layer=%.0n, 2 = %.0n, 3 = %.0n", $$TIME, $1, $2, $3 # $layer, $ctrX, $ctrY
+    LogMessage 0, $log
+	GetExtents $1, $lx,$ly, $ux,$uy
+	Calc $tmp = $ux  - $lx
+	Calc $tmp = $tmp / 2.0
+	Calc $2   = $lx  + $tmp
+	Calc $tmp = $uy  - $ly
+	Calc $tmp = $tmp / 2.0
+	Calc $3   = $ly  + $tmp
+ENDMACRO
+
+MACRO _GetSavedFileInfo
+    StrWrite $log, "_GetSavedFileInfo Macro Called %s", $$TIME
+    LogMessage 0, $log
+	GetDesignProperty "Customer:",    $gCustomer
+	GetDesignProperty "JobNum:",      $gJobNumT
+	GetDesignProperty "Top PN:",      $gPartNumT
+	GetDesignProperty "Bot PN:",      $gPartNumB
+	GetDesignProperty "Material:",    $materialArray
+	GetDesignProperty "Process:",     $gProcessT
+	GetDesignProperty "Coating:",     $gCoatT
+	GetDesignProperty "Frame:",       $gFrame
+	GetDesignProperty "Text Method:", $gTextMode
+ENDMACRO
+
+MACRO _GetSecondEmptyLayer
+    StrWrite $log, "_GetSecondEmptyLayer Macro Called %s", $$TIME
+    LogMessage 0, $log
+	If $$CALLDEPTH == 0
+		LogMessage 0, "_GetSecondEmptyLayer macro must be called from another macro..."
+		Stop "_GetSecondEmptyLayer macro must be called from another macro..."
+	End
+	Set $LAY=32
+	Set $$STATUS = $$FALSE
+	Set $cnt = 0
+	Repeat $$STATUS == $$FALSE
+		Calc $LAY = $LAY + 1
+		IsFreeLayer $LAY
+		If $$STATUS ==$$TRUE
+			Repeat $cnt < 1
+				Calc $LAY = $LAY + 1
+				IsFreeLayer $LAY
+				If $$STATUS == $$TRUE
+					Set $1=$LAY
+					Calc $cnt = $cnt + 1
+				End
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _GetTXTPosition
+    StrWrite $log, "_GetTXTPosition Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $yesNo = $$NO
+	If $gPasteLayers == 2 # Bot only
+		IsEmptyLayer $gTxtOut20B
+		If $$STATUS == $$NO
+			GetExtents $gTxtOut20B, $lx,$ly, $ux,$uy
+			Calc $lx = 0 - $ux
+			Calc $lx = $lx + 1.25
+			Calc $ly = 0 - $uy
+			Calc $ly = $ly + 1.95
+		Else
+			GetExtents $gLMDB, $lx,$ly, $ux,$uy
+			Calc $lx = 0 - $ux
+			Calc $lx = $lx + 4.25
+			Calc $ly = 0 - $uy
+			Calc $ly = $ly + 4.95
+		End
+	Else
+		IsEmptyLayer $gTxtOut20T
+		If $$STATUS == $$NO
+			GetExtents $gTxtOut20T, $lx,$ly, $ux,$uy
+			Calc $lx = 0 - $ux
+			Calc $lx = $lx + 1.25
+			Calc $ly = 0 - $uy
+			Calc $ly = $ly + 1.95
+		Else
+			GetExtents $gLMDT, $lx,$ly, $ux,$uy
+			Calc $lx = 0 -$ux
+			Calc $lx = $lx + 4.25
+			Calc $ly= 0 -$uy
+			Calc $ly= $ly+ 4.95
+		End
+	End
+	Set $1 = $lx
+	Set $2 = $ly
+ENDMACRO
+
+MACRO _GetUpdateProp
+    StrWrite $log, "_GetUpdateProp Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $update
+	StrCmp  $1, "No"
+	If $$STATUS == 0
+		PutDesignProperty "Update_Library", $1
+	Else
+		GetDesignProperty "Update_Library", $1
+		If $$STATUS == 0
+			StrSet $1, "Yes"
+		End
+	End
+ENDMACRO
+
+MACRO _HasFlash
+    StrWrite $log, "_HasFlash Macro Called %s", $$TIME
+    LogMessage 0, $log
+	GetFirstItem $1, $seqno, $net, $dcode, $type, $x,$y, $x2,$y2, $dia, $cw, $flags
+	If $type == $$DBFLASH
+		Set $2 = $$YES
+	Else
+	End
+ENDMACRO
+
+MACRO _IDBorder
+    StrWrite $log, "_IDBorder Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $dcode 	  = 0
+	Set $NoBottom = 0
+	Set $yesNo 	  = $$NO
+	CALLMACRO _IsEmptyLayer, $gBorderB, $yesNo
+	CALLMACRO _IsEmptyLayer, $gOrigPasteB, $NoBottom
+	If $yesNo == $$YES
+		CALLMACRO _IsEmptyLayer, $gBorderT, $yesNo
+		If $yesNo == $$YES
+			If $gCADmatic
+				Set $yesNo = $$NO
+			Else
+				GetYesNo "Is there an existing continuous outline border on a visible layer?", $yesNo
+			End
+			If $yesNo == $$YES
+				Move
+					By       $$ITEMMODE
+					Flashes  $$NO
+					Draws    $$NO
+					Arcs     $$NO
+					Polys    $$YES
+					Text     $$NO
+					Polarity 0
+					Layer    0 # Copy from all visible
+					ToLayer  $gBorderT
+					InPlace  $$YES
+					Dcode    0 # Copy all D-codes
+					GetPoint "Please select an existing continuous border on a visible layer", $x,$y
+					Go $x,$y
+				End
+				If $gPasteLayers > 1
+					CopyLayer $gBorderT, $gBorderB
+				End
+			End
+			If $yesNo == $$NO
+				GetExtents 0, $blx,$bly, $bux,$buy
+				ActiveLayer $gBorderT
+				Calc $blx = $blx - .005
+				Calc $bly = $bly - .005
+				Calc $bux = $bux + .005
+				Calc $buy = $buy + .005
+				GetFreeDcode $dcode
+				GetDcodeInfo $dcode, $shp, 	  $custom, $xs,$ys, $type, $usedcnt, $flags, $rot, $scratch
+				Set $xs = .001
+				PutDcodeInfo $dcode, $$ROUND, $custom, $xs,$ys, $type, $usedcnt, $flags, $rot, $scratch
+				CurrentDcode $dcode
+				AddRect $blx, $bly, $bux, $buy
+				If $NoBottom == $$NO
+					CopyLayer $gBorderT, $gBorderB
+				End
+			End
+		End
+	Else
+		If $gPasteLayers == 1
+			DeleteLayer $gBorderB
+		End
+	End
+	Set $1 = $NoBottom
+ENDMACRO
+
+MACRO _IsEmptyLayer
+	GetLayer $1, $fn, $ln, $an, $vis, $fc, $dc, $type, $polarity, $key, $ft, $lx,$ly, $ux,$uy, $netid, $table
+    StrWrite $log, "_IsEmptyLayer Called %s, Checking Layer %.0n (%s), Initital Status = %.0n", $$TIME, $1, $ln, $2
+    LogMessage 0, $log
+	If $$CALLDEPTH == 0
+		LogMessage 0, "_IsEmptyLayer macro must be called from another macro..."
+		Stop "_IsEmptyLayer macro must be called from another macro..."
+	End
+	IsEmptyLayer $1
+	Set $2 = $$STATUS
+    StrWrite $log, "_IsEmptyLayer finished %s, Checked Layer %.0n (%s), finishing Status = %.0n", $$TIME, $1, $ln, $2
+    LogMessage 0, $log
+ENDMACRO
+
+MACRO _IsEven
+    StrWrite $log, "_IsEven Macro Called %s", $$TIME
+    LogMessage 0, $log
+
+	Set $even = 2
+	Set $2 = $$NO
+	Repeat $even < 21
+		If $1 == $even
+			Set $2 = $$YES
+		End
+		Calc $even = $even + 2
+	End
+ENDMACRO
+
+MACRO _LayertoPolys
+    StrWrite $log, "_LayertoPolys Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $gCutT $gCutB layers need to be converted to polygons prior to export
+	# $1 = $gPasteLayers
+	# $2 = $gComboYesNo
+	Set $sLayer = 0
+	If $gPasteLayers == 2
+		Set $yesNo = $$NO
+		CALLMACRO _HasFlash, $gCutB, $yesNo
+		If $yesNo == $$YES
+			GetFreeLayer $sLayer
+			Composite2Layer
+				CompositeLayer $gCutB
+				ToLayer $sLayer
+				Method 0 #
+				Go
+			End
+			DeleteLayer $gCutB
+			CopyLayer $sLayer, $gCutB
+			DeleteLayer $sLayer
+		End
+	End
+	If $gPasteLayers == 1
+		Set $yesNo = $$NO
+		CALLMACRO _HasFlash, $gCutT, $yesNo
+		If $yesNo == $$YES
+			GetFreeLayer $sLayer
+			Composite2Layer
+				CompositeLayer $gCutT
+				ToLayer $sLayer
+				Method 0 #
+				Go
+			End
+			DeleteLayer $gCutT
+			CopyLayer $sLayer, $gCutT
+			DeleteLayer $sLayer
+		End
+	End
+	If $gPasteLayers == 3
+		Set $yesNo = $$NO
+		CALLMACRO _HasFlash, $gCutT, $yesNo
+		If $yesNo == $$YES
+			GetFreeLayer $sLayer
+			Composite2Layer
+				CompositeLayer $gCutT
+				ToLayer $sLayer
+				Method 0 #
+				Go
+			End
+			DeleteLayer $gCutT
+			CopyLayer $sLayer, $gCutT
+			DeleteLayer $sLayer
+		End
+		If $gComboYesNo == $$NO
+			Set $yesNo == $$NO
+			CALLMACRO _HasFlash, $gCutB, $yesNo
+			If $yesNo == $$YES
+				GetFreeLayer $sLayer
+				Composite2Layer
+					CompositeLayer $gCutB
+					ToLayer $sLayer
+					Method 0 #
+					Go
+				End
+				DeleteLayer $gCutB
+				CopyLayer $sLayer, $gCutB
+				DeleteLayer $sLayer
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _MakeFoilTabs
+    StrWrite $log, "_MakeFoilTabs Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# $foilX, $foilY
+	Set $foilX = $1
+	Set $foilY = $2
+	Set $tabsX = 0
+	Set $tabsY = 0
+	Set $tabsYeven = 0
+	Set $tabsXeven = 0
+	Set $size = $1
+	Repeat $size >= 2
+		Calc $size = $size - 1.5
+		Calc $tabsX = $tabsX + 1
+	End
+	Set $size = $2
+	Repeat $size >= 2
+		Calc $size = $size - 1.5
+		Calc $tabsY = $tabsY + 1
+	End
+	Calc $hX = $foilX /2
+	Calc $hY = $foilY/2
+	Calc $lx = 0 - $hX
+	Calc $ly = 0 - $hY
+	Calc $ux = 0 + $hX
+	Calc $uy = 0 + $hY
+	Calc $lxl = $lx + 1.0
+	Calc $uxl = $ux - 1.0
+	Calc $lyl = $ly + 1.0
+	Calc $uyl = $uy - 1.0
+	# Do vertical clipping
+	CALLMACRO _IsEven, $tabsX, $tabsXeven
+	Set $cnt = 1
+	If $tabsXeven == $$NO # Odd number of Tabs
+		Set $cliplx = 0
+		Calc $cliplx = $cliplx - .0075
+		Calc $clipux = $cliplx + 0.015
+		Clip
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$YES
+			Polys    $$YES
+			Layer    $gCheckPlotT
+			Go $cliplx,$ly,$clipux,$uy
+		End
+		Calc $cnt = $cnt + 1
+		Repeat $cnt <= $tabsX
+			# left side
+			Calc $cliplx = $cliplx - 1.5075
+			Calc $clipux = $cliplx + 0.015
+			Repeat $cliplx > $lxl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $cliplx,$ly,$clipux,$uy
+				End
+				Calc $cnt = $cnt + 1
+				Calc $cliplx = $cliplx - 1.5075
+				Calc $clipux = $cliplx + 0.015
+			End
+			# right side
+			Set $cliplx = 0
+			Calc $cliplx = $cliplx + 1.4925
+			Calc $clipux = $cliplx + 0.015
+			Repeat $clipux < $uxl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $cliplx,$ly,$clipux,$uy
+				End
+				Calc $cliplx = $cliplx + 1.5
+				Calc $clipux = $cliplx + 0.015
+				Calc $cnt = $cnt + 1
+			End
+		End
+	Else
+		# Do Even Vertical Clipping
+		Set  $cliplx = 0
+		Calc $cliplx = $cliplx - .7575
+		Calc $clipux = $cliplx + 0.015
+		Clip
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$YES
+			Polys    $$YES
+			Layer    $gCheckPlotT
+			Go $cliplx,$ly,$clipux,$uy
+		End
+		Calc $cnt = $cnt + 1
+		Repeat $cnt <= $tabsX
+			# left side
+			Calc $cliplx = $cliplx - 1.5075
+			Calc $clipux = $cliplx + 0.015
+			Repeat $cliplx > $lxl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $cliplx,$ly,$clipux,$uy
+				End
+				Calc $cnt = $cnt + 1
+				Calc $cliplx = $cliplx - 1.5075
+				Calc $clipux = $cliplx + 0.015
+			End
+			# right side
+			Set $cliplx = 0
+			Calc $cliplx = $cliplx + 0.7575
+			Calc $clipux = $cliplx + 0.015
+			Repeat $clipux < $uxl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $cliplx,$ly,$clipux,$uy
+				End
+				Calc $cliplx = $cliplx + 1.5
+				Calc $clipux = $cliplx + 0.015
+				Calc $cnt = $cnt + 1
+			End
+		End
+	End
+	# Do horizontal clipping
+	CALLMACRO _IsEven, $tabsY, $tabsYeven
+	Set $cnt = 1
+	if $tabsYeven == $$NO # Odd number of Tabs
+		Set $cliply = 0
+		Calc $cliply = $cliply - 0.0075
+		Calc $clipuy = $cliply + 0.015
+		Clip
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$YES
+			Polys    $$YES
+			Layer    $gCheckPlotT
+			Go $lx,$cliply,$ux,$clipuy
+		End
+		Calc $cnt = $cnt + 1
+		Repeat $cnt <= $tabsY
+			# bottom side
+			Calc $cliply = $cliply - 1.5075
+			Calc $clipuy = $cliply + 0.015
+			Repeat $cliply >= $lyl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $lx,$cliply,$ux,$clipuy
+				End
+				Calc $cnt = $cnt + 1
+				Calc $cliply = $cliply - 1.5075
+				Calc $clipuy = $cliply + 0.015
+			End
+			# right side
+			Set $cliply = 0
+			Calc $cliply = $cliply + 1.4925
+			Calc $clipuy = $cliply + 0.015
+			Repeat $clipuy < $uyl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $lx,$cliply,$ux,$clipuy
+				End
+				Calc $cliply = $cliply + 1.5
+				Calc $clipuy = $cliply + 0.015
+				Calc $cnt = $cnt + 1
+			End
+		End
+	Else
+		# DO Even Vertical Clipping
+		Set $cliply = 0
+		Calc $cliply = $cliply - 0.7575
+		Calc $clipuy = $cliply + 0.015
+		Clip
+			By       $$WINDOWMODE
+			Boundary $$YES
+			Flashes  $$NO
+			Draws    $$YES
+			Polys    $$YES
+			Layer    $gCheckPlotT
+			Go $lx,$cliply,$ux,$clipuy
+		End
+		Calc $cnt = $cnt + 1
+		Repeat $cnt <= $tabsX
+			# left side
+			Calc $cliply = $cliply - 1.5075
+			Calc $clipuy = $cliply + 0.015
+			Repeat $cliply > $lyl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $lx,$cliply,$ux,$clipuy
+				End
+				Calc $cnt = $cnt + 1
+				Calc $cliply = $cliply - 1.5075
+				Calc $clipuy = $cliply + 0.015
+			End
+			# right side
+			Set $cliply = 0
+			Calc $cliply = $cliply + 0.7575
+			Calc $clipuy = $cliply + 0.015
+			Repeat $clipuy < $uyl
+				Clip
+					By       $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$NO
+					Draws    $$YES
+					Polys    $$YES
+					Layer    $gCheckPlotT
+					Go $lx,$cliply,$ux,$clipuy
+				End
+				Calc $cliply = $cliply + 1.5
+				Calc $clipuy = $cliply + 0.015
+				Calc $cnt = $cnt + 1
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _MakeSizePlot
+    StrWrite $log, "_MakeSizePlot Macro Called %s", $$TIME
+    LogMessage 0, $log
+	DeleteLayer $gSizePlotT
+	DeleteLayer $gSizePlotB
+	Layern $gSizePlotT
+		LyrName    "Size Plot Top"
+		FlashColor "CornflowerBlue"
+		DrawColor  "ForestGreen"
+	End
+	Layern $gSizePlotB
+		LyrName    "Size Plot Bottom"
+		FlashColor "CornflowerBlue"
+		DrawColor  "ForestGreen"
+	End
+	If $gPasteLayers == 1
+		CopyLayer $gCutT, $gSizePlotT
+		CALLMACRO _MirrorLayer, $gSizePlotT
+		CALLMACRO _SizePlotText,$gSizePlotT
+		CALLMACRO _MirrorLayer, $gEngraveT
+		CopyLayer $gEngraveT, 	$gSizePlotT
+		CopyLayer $gAlignT, 	$gSizePlotT
+		CALLMACRO _RAD_GiveAnF, $gEngraveT, $gAlignT, $gSizePlotT
+		StrCmp $gFrame, "FOIL_ONLY"
+		If $$STATUS == 0
+			CopyLayer $gTxtOut20T, $gSizePlotT
+		End
+		CALLMACRO _MirrorLayer, $gEngraveT
+	End
+	If $gPasteLayers == 2
+		CopyLayer $gCutB, $gSizePlotB
+		CALLMACRO _MirrorLayer, $gSizePlotB
+		CALLMACRO _SizePlotText,$gSizePlotB
+		CALLMACRO _MirrorLayer, $gEngraveB
+		CopyLayer $gEngraveB, 	$gSizePlotB
+		CopyLayer $gAlignB, 	$gSizePlotB
+		CALLMACRO _RAD_GiveAnF, $gEngraveB, $gAlignB, $gSizePlotB
+		StrCmp $gFrame, "FOIL_ONLY"
+		If $$STATUS == 0
+			CopyLayer $gTxtOut20B, $gSizePlotB
+		End
+		CALLMACRO _MirrorLayer, $gEngraveB
+	End
+	If $gPasteLayers == 3
+		CopyLayer $gCutT, $gSizePlotT
+		CALLMACRO _MirrorLayer, $gSizePlotT
+		CALLMACRO _SizePlotText,$gSizePlotT
+		CALLMACRO _MirrorLayer, $gEngraveT
+		CopyLayer $gEngraveT, 	$gSizePlotT
+		CopyLayer $gAlignT, 	$gSizePlotT
+		CALLMACRO _RAD_GiveAnF, $gEngraveT, $gAlignT, $gSizePlotT
+		StrCmp $gFrame, "FOIL_ONLY"
+		If $$STATUS == 0
+			CopyLayer $gTxtOut20T, $gSizePlotT
+		End
+		CALLMACRO _MirrorLayer, $gEngraveT
+		If $gComboYesNo == $$NO
+			CopyLayer $gCutB, $gSizePlotB
+			CALLMACRO _MirrorLayer, $gSizePlotB
+			CALLMACRO _SizePlotText,$gSizePlotB
+			CALLMACRO _MirrorLayer, $gEngraveB
+			CopyLayer $gEngraveB, 	$gSizePlotB
+			CopyLayer $gAlignB, 	$gSizePlotB
+			CALLMACRO _RAD_GiveAnF, $gEngraveB, $gAlignB, $gSizePlotB
+			StrCmp $gFrame, "FOIL_ONLY"
+			If $$STATUS == 0
+				CopyLayer $gTxtOut20B, $gSizePlotB
+			End
+			CALLMACRO _MirrorLayer, $gEngraveB
+		End
+	End
+ENDMACRO
+
+MACRO _OPLayerToPolys
+    StrWrite $log, "_OPLayerToPolys Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# Convert Mixed Polarity
+	# $1 = $gPasteLayers
+	# $2 = $gComboYesNo
+	Set $sLayer = 0
+	If $gPasteLayers == 1
+		GetLayer $gOrigPasteT, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+		If $polarity == 2
+			GetFreeLayer $sLayer
+			StrWrite $log, "Flattening Top Paste Layer %s", $gOrigPasteT
+			LogMessage 0, $log
+			Composite2Layer
+				CompositeLayer $gOrigPasteT
+				ToLayer        $sLayer
+				Method         0 #
+				Go
+			End
+			CALLMACRO _ClearLayer, $gOrigPasteT, 1
+			CopyLayer   $sLayer, $gOrigPasteT
+			DeleteLayer $sLayer
+		End
+	End
+	If $gPasteLayers == 2
+		GetLayer $gOrigPasteB, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+		If $polarity == 2
+			GetFreeLayer $sLayer
+			StrWrite $log, "Flattening Bottom Paste Layer %s", $gOrigPasteB
+			LogMessage 0, $log
+			Composite2Layer
+				CompositeLayer $gOrigPasteB
+				ToLayer        $sLayer
+				Method         0 #
+				Go
+			End
+			CALLMACRO _ClearLayer, $gCutB, 1
+			CopyLayer   $sLayer, $gOrigPasteB
+			DeleteLayer $sLayer
+		End
+	End
+	If $gPasteLayers == 3
+		GetLayer $gOrigPasteT, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+		If $polarity == 2
+			GetFreeLayer $sLayer
+			StrWrite $log, "Flattening Top Paste Layer %s", $gOrigPasteT
+			LogMessage 0, $log
+			Composite2Layer
+				CompositeLayer $gOrigPasteT
+				ToLayer        $sLayer
+				Method         0 #
+				Go
+			End
+			CALLMACRO _ClearLayer, $gOrigPasteT, 1
+			CopyLayer   $sLayer, $gOrigPasteT
+			DeleteLayer $sLayer
+		End
+		If $gComboYesNo == $$NO
+			GetLayer $gOrigPasteB, $fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly, $ux,$uy,$netid,$table
+			If $polarity == 2
+				GetFreeLayer $sLayer
+				StrWrite $log, "Flattening Bottom Paste Layer %s", $gOrigPasteB
+				LogMessage 0, $log
+				Composite2Layer
+					CompositeLayer $gOrigPasteB
+					ToLayer        $sLayer
+					Method         0 #
+					Go
+				End
+				CALLMACRO _ClearLayer, $gCutB, 1
+				CopyLayer   $sLayer, $gOrigPasteB
+				DeleteLayer $sLayer
+			End
+		End
+	End
+ENDMACRO
+
+MACRO _SetgPasteLayersM
+    StrWrite $log, "_SetgPasteLayersM Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $gPasteLayers = 0
+	IsEmptyLayer $gModPasteT
+	If $$STATUS == $$FALSE
+		Set $gPasteLayers = 1
+	End
+	IsEmptyLayer $gModPasteB
+	If $$STATUS == $$FALSE
+		Calc $gPasteLayers = $gPasteLayers + 2
+	End
+	# no Paste Layers
+	If $gPasteLayers == 0
+		LogMessage 0, "No Modified Paste Layers Found. \r\rCannot generate checkplot and cut files without data on modified paste layer(s)"
+		Stop		  "No Modified Paste Layers Found. \r\rCannot generate checkplot and cut files without data on modified paste layer(s)"
+	End
+ENDMACRO
+
+MACRO _SetgPasteLayersO
+    StrWrite $log, "_SetgPasteLayersO Macro Called %s", $$TIME
+    LogMessage 0, $log
+	Set $gPasteLayers = 0
+	IsEmptyLayer $gOrigPasteT
+	If $$STATUS == $$FALSE
+		Set $gPasteLayers = 1
+	End
+	IsEmptyLayer $gOrigPasteB
+	If $$STATUS == $$FALSE
+		Calc $gPasteLayers = $gPasteLayers + 2
+	End
+	If $gPasteLayers == 0
+		LogMessage 0, "No Original Paste Layers Found. Please import original paste layers and re-run Main Process (F2)"
+		Stop		  "No Original Paste Layers Found. Please import original paste layers and re-run Main Process (F2)"
+	End
+ENDMACRO
+
+MACRO _TextEdit
+    StrWrite $log, "_TextEdit Macro Called %s", $$TIME
+    LogMessage 0, $log
+	StrSet $dateISO, "Date Error"
+	CALLMACRO _GetISODate, $dateISO
+	# Updated file
+	# Create Text Block File
+	SplitPath $$DSNNAME, $dir, $gJobNumT, $tmp2
+	StrWrite $1, "%s\\TextEdit.txt", $dir
+	StrWrite $2, "%s\\TextEditB.txt", $dir
+	FileOpen $tbef,  $1, "r"
+	If $$STATUS == 1
+		# Open File for editing
+		GetAppdatafolder $appDataPath
+		StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+		StrWrite $cmd,"%s %s", $bat, $2
+		SysCmd $cmd
+		GetAppdatafolder $appDataPath
+		StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+		StrWrite $cmd,"%s %s", $bat, $1
+		SysCmd $cmd
+	Else
+		If $gPasteLayers == 3
+			# Create Text Block File for Bottom
+			SplitPath $$DSNNAME, $dir, $gJobNumT, $ext
+			StrWrite  $2, "%s\\TextEditB.txt", $dir
+			FileOpen  $tbef,  $2, "w"
+				FileWrite $tbef, "%s", $gCustomer
+				FileWrite $tbef, "P/N: %s", $gPartNumB
+				FileWrite $tbef, "Thk: %1.1n mils", $gThickB
+				FileWrite $tbef, "Coating: %s", $gCoatB
+				FileWrite $tbef, "Stentech Job#: %s", $gJobNumB
+				FileWrite $tbef, "Date: %s",  $dateISO
+				FileWrite $tbef, "" # bogus last line added so edited text is not clipped.
+			FileClose $tbef
+			# Open File for editing
+			GetAppdatafolder $appDataPath
+			StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+			StrWrite $cmd,"%s %s", $bat, $2
+			SysCmd $cmd
+		End
+		FileOpen $tbef,  $1, "w"
+			FileWrite $tbef, "%s", $gCustomer
+			FileWrite $tbef, "P/N: %s", $gPartNumT
+			FileWrite $tbef, "Thk: %1.1n mils", $gThickT
+			FileWrite $tbef, "Coating: %s", $gCoatT
+			FileWrite $tbef, "Stentech Job#: %s", $gJobNumT
+			FileWrite $tbef, "Date: %s",  $dateISO
+			FileWrite $tbef, "" # bogus last line added so edited text is not clipped.
+		FileClose $tbef
+		# Open File for editing
+		GetAppdatafolder $appDataPath
+		StrWrite $bat, "%s\\macros\\ReferenceFiles\\OpenText.bat", $appDataPath
+		StrWrite $cmd,"%s %s", $bat, $1
+		SysCmd $cmd
+	End
+ENDMACRO
+
+MACRO _engCrop
+    StrWrite $log, "_engCrop Macro Called %s", $$TIME
+    LogMessage 0, $log
+	# Reassign Variables for clarity
+	Set    $lx =            $1
+	Set    $ly =            $2
+	Set    $ux =            $3
+	Set    $uy =            $4
+	Set    $layer =         $5
+	Set    $engCrop =       $6
+	StrSet $cmtCornerMarks, $7
+
+	Set $dcode = 10
+	GetFreeDcode $dcode
+	GetDcodeInfo $dcode, $shp, $cus, $x,$y, $typ, $used, $flags, $scr
+	Set $shp = $$ROUND
+	Set $xSize = .005
+	Set $typ = 0
+	PutDcodeInfo $dcode, $shp, $cus, $xSize, $ySize, $typ, $used, $flags, $scr
+	CurrentDcode $dcode
+	If $engCrop == -1
+		# Set Crop Marks Array
+		StrArray $crop(3)
+			StrSet $crop(1), "Inside"
+			StrSet $crop(2), "Outside"
+			StrSet $crop(3), "Skip"
+		# Setting Form
+		StrWrite $cropLength,  "%.1n", $gCropLength
+		Set $formId  	       = -1
+		Set $Radio1  	       = -1
+		Set $Edit1   	       = -1
+		Set $Button1           = -1
+		Set $Button2           = -1
+		Set $Static1 	       = -1
+		Set $Static2 	       = -1
+		Set $cropDropSel       = 1
+		If $gCADmatic
+			StrCmp $cmtCornerMarks, "Inside"
+			If $$STATUS == 0
+				Set $cropDropSel = 1
+			End
+			StrCmp $cmtCornerMarks, "Outside"
+			If $$STATUS == 0
+				Set $cropDropSel = 2
+			End
+			StrCmp $cmtCornerMarks, "Skip"
+			If $$STATUS == 0
+				Set $cropDropSel = 3
+			End
+		Else
+			DefineForm
+				FormId				$formId
+				Title				"Add Crop Marks"
+				Margin				0.4
+				StaticText			$Static1,  0.50, 0.00, 2.5, 0.25, "Corner Marks (type):", $$FALSE
+				RadioButtonControls $Radio1,   2.50, 0.00, 3.5, 0.25, 3, $crop, $cropDropSel, $$FALSE, $$TRUE
+				StaticText			$Static2,  0.50, 0.50, 2.5, 0.25, "Crop Mark Length (Inches):", $$FALSE
+				EditControl	  		$Edit1,    2.50, 0.50, 2.5, 0.25, $cropLength
+			End
+			OpenForm $formId
+		End
+		StrRead $cropLength, "%n", $gCropLength
+
+		If $cropDropSel == 1  # Inside
+			Set $engCrop = $$YES
+			StrWrite $log, "Inside corner marks added at %n inches", $gCropLength
+			LogMessage 0,  $log
+			StrSet $gCropInOut, "Inside corner marks"
+		End
+		If $cropDropSel == 2  # Outside
+			Set $engCrop = $$YES
+			StrWrite $log, "Outside corner marks added at %n inches", $gCropLength
+			LogMessage 0,  $log
+			StrSet $gCropInOut, "Outside corner marks"
+		End
+		If $cropDropSel == 3  # Skip
+			Set $engCrop = $$NO
+			StrWrite $log, "Corner marks skipped by user"
+			LogMessage 0,  $log
+			StrSet $gCropInOut, "Skip"
+		End
+		# End
+	End
+	If $engCrop == $$YES
+		ActiveLayer $layer
+		StrCmp $gCropInOut, "Inside corner marks"
+		If $$STATUS == 0 # Inside
+			Calc 	$lys = $ly + $gCropLength
+			Calc 	$lxe = $lx + $gCropLength
+			AddDraw $lx, $lys, $lx, $ly, $lxe, $ly
+			Calc 	$uxs = $ux - $gCropLength
+			Calc 	$uye = $uy - $gCropLength
+			AddDraw $uxs, $ly,  $ux, $ly, $ux,  $lys
+			AddDraw $uxs, $uy,  $ux, $uy, $ux,  $uye
+			AddDraw $lx,  $uye, $lx, $uy, $lxe, $uy
+		End
+		StrCmp $gCropInOut, "Outside corner marks"
+		If $$STATUS == 0 # Outside
+			Calc 	$lye = $ly - $gCropLength
+			Calc 	$lxs = $lx - $gCropLength
+			AddDraw $lxs, $ly, $lx, $ly, $lx, $lye
+			Calc 	$uxe = $ux + $gCropLength
+			Calc 	$uys = $uy + $gCropLength
+			AddDraw $ux,  $uys, $ux, $uy, $uxe, $uy
+			AddDraw $uxe, $ly,  $ux, $ly, $ux,  $lye
+			AddDraw $lxs, $uy,  $lx, $uy, $lx,  $uys
+		End
+	End
+ENDMACRO

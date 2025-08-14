@@ -1,0 +1,350 @@
+MACRO MakeFoilOutline
+	UNDO $$NO
+	SET $layer = 1
+	GETVALUE "Please enter the destination layer for the foil outline;", $layer
+	SET $dcode = 10
+	CALLMACRO _GetFirstBlankDcode, $dcode
+	GETDCODEINFO $dcode, $shp, $cus, $x, $y, $typ, $used, $flags, $scr
+	SET $shp = $$ROUND
+	SET $xsize = .01
+	SET $ysize = .01
+	SET $typ = 0
+	PUTDCODEINFO $dcode, $shp, $cus, $xsize, $ysize, $typ, $used, $flags, $scr
+	CURRENTDCODE $dcode
+	SET $foilX = 2
+	SET $foilY = 2
+	SET $tabsX= 1
+	SET $tabsY= 1
+	SET $dimX= 2
+	SET $dimY= 2
+	GETVALUE "Please enter the Foil size in the X dimension: (Inches)", $foilX
+	GETVALUE "Please enter the Foil size in the Y dimension: (Inches)", $foilY
+	CALC $hX = $foilX /2
+	CALC $hY = $foilY/2
+	CALC $lx = 0 - $hX
+	CALC $ly = 0 - $hY
+	CALC $ux = 0 + $hX
+	CALC $uy = 0 + $hY
+	CALLMACRO _FoilVis, $layer
+	VIEWALL
+	#SET $breakpoint = 0
+	#GETVALUE "This is a Break Point, click the Step button in the macro developer", $breakpoint
+	ACTIVELAYER $layer
+	AddRectRounded .05, $lx, $ly, $ux, $uy
+	IF $foilX > 2
+		IF $foilY > 2
+			GETLISTCHOICE "Choose Foil Perimeter Type:", $type, "Solid Outline", "Corner Marks Only", "Tabs"
+			STRCMP $type, "Solid Outline"
+			IF $$STATUS == 0
+			ELSE
+				STRCMP $type, "Tabs"
+				IF $$STATUS == 0
+					CALLMACRO _MakeFoilTabs, $foilX, $foilY, $layer
+				END
+				STRCMP $type, "Corner Marks Only"
+				IF $$STATUS == 0
+					#Do Horizontal Clip
+					CALC $cliplx = $lx - .0075
+					CALC $clipux = $ux + .0075
+					CALC $cliply = $ly + .5
+					CALC $clipuy = $uy - .5
+					CLIP
+						By $$WINDOWMODE
+						Boundary $$YES
+						Flashes $$NO
+						Draws $$YES
+						POLYS $$YES
+						Layer $layer
+						GO $cliplx,$cliply ,$clipux,$clipuy 
+					END
+					#Do Vertical Clip
+					CALC $cliplx = $lx + .5
+					CALC $clipux = $ux - .5
+					CALC $cliply = $ly - .0075
+					CALC $clipuy = $uy + .0075
+					CLIP
+						By $$WINDOWMODE
+						Boundary $$YES
+						Flashes $$NO
+						Draws $$YES
+						POLYS $$YES
+						Layer $layer
+						GO $cliplx,$cliply ,$clipux,$clipuy 
+					END
+				END
+			END
+		END
+	END
+	UNDO $$YES
+	MESSAGEBOX "Macro Complete", "Foil added", 0
+ENDMACRO
+MACRO _MakeFoilTabs
+	#$foilX, $foilY
+	SET $foilX = $1
+	SET $foilY = $2
+	SET $layer = $3
+	SET $tabsX = 0
+	SET $tabsY = 0
+	SET $tabsYeven = 0
+	SET $tabsXeven = 0
+	SET $size = $1
+	Repeat $size >= 2
+		CALC $size = $size - 1.5
+		CALC $tabsX = $tabsX + 1
+	END
+	SET $size = $2
+	Repeat $size >= 2
+		CALC $size = $size - 1.5
+		CALC $tabsY = $tabsY + 1
+	END
+	CALC $hX = $foilX /2
+	CALC $hY = $foilY/2
+	CALC $lx = 0 - $hX
+	CALC $ly = 0 - $hY
+	CALC $ux = 0 + $hX
+	CALC $uy = 0 + $hY
+	CALC $lxl = $lx + 1.0
+	CALC $uxl = $ux - 1.0
+	CALC $lyl = $ly + 1.0
+	CALC $uyl = $uy - 1.0
+	#Do vertical clipping
+	CALLMACRO _IsEven, $tabsX, $tabsXeven
+	SET $cnt = 1
+	IF  $tabsXeven == $$NO #Odd number of Tabs
+		SET $cliplx = 0
+		CALC $cliplx = $cliplx - .0075
+		CALC $clipux = $cliplx + .015
+		CLIP
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes $$NO
+			Draws $$YES
+			POLYS $$YES
+			Layer $layer
+			GO $cliplx,$ly,$clipux,$uy
+		END
+		CALC $cnt = $cnt + 1
+		REPEAT $cnt <= $tabsX 
+			#left side
+			CALC $cliplx = $cliplx - 1.5075
+			CALC $clipux = $cliplx + .015
+			REPEAT $cliplx > $lxl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $cliplx,$ly,$clipux,$uy
+				END
+				CALC $cnt = $cnt + 1
+				CALC $cliplx = $cliplx - 1.5075
+				CALC $clipux = $cliplx + .015
+			END
+			#right side
+			SET $cliplx = 0
+			CALC $cliplx = $cliplx + 1.4925
+			CALC $clipux = $cliplx + .015
+			REPEAT $clipux < $uxl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $cliplx,$ly,$clipux,$uy
+				END
+				CALC $cliplx = $cliplx + 1.5
+				CALC $clipux = $cliplx + .015
+				CALC $cnt = $cnt + 1
+			END
+		END
+	ELSE
+		#DO Even Vertical Clipping
+		SET $cliplx = 0
+		CALC $cliplx = $cliplx - .7575
+		CALC $clipux = $cliplx + .015
+		CLIP
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes $$NO
+			Draws $$YES
+			POLYS $$YES
+			Layer $layer
+			GO $cliplx,$ly,$clipux,$uy
+		END
+		CALC $cnt = $cnt + 1
+		REPEAT $cnt <= $tabsX 
+			#left side
+			CALC $cliplx = $cliplx - 1.5075
+			CALC $clipux = $cliplx + .015
+			REPEAT $cliplx > $lxl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $cliplx,$ly,$clipux,$uy
+				END
+				CALC $cnt = $cnt + 1
+				CALC $cliplx = $cliplx - 1.5075
+				CALC $clipux = $cliplx + .015
+			END
+			#right side
+			SET $cliplx = 0
+			CALC $cliplx = $cliplx + .7575
+			CALC $clipux = $cliplx + .015
+			REPEAT $clipux < $uxl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $cliplx,$ly,$clipux,$uy
+				END
+				CALC $cliplx = $cliplx + 1.5
+				CALC $clipux = $cliplx + .015
+				CALC $cnt = $cnt + 1
+			END
+		END
+	END
+	#Do horizontal clipping
+	CALLMACRO _IsEven, $tabsY, $tabsYeven
+	SET $cnt = 1
+	IF  $tabsYeven == $$NO #Odd number of Tabs
+		SET $cliply = 0
+		CALC $cliply = $cliply - .0075
+		CALC $clipuy = $cliply + .015
+		CLIP
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes $$NO
+			Draws $$YES
+			POLYS $$YES
+			Layer $layer
+			GO $lx,$cliply,$ux,$clipuy
+		END
+		CALC $cnt = $cnt + 1
+		REPEAT $cnt <= $tabsY 
+			#bottom side
+			CALC $cliply = $cliply - 1.5075
+			CALC $clipuy = $cliply + .015
+			REPEAT $cliply >= $lyl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $lx,$cliply,$ux,$clipuy
+				END
+				CALC $cnt = $cnt + 1
+				CALC $cliply = $cliply - 1.5075
+				CALC $clipuy = $cliply + .015
+			END
+			#right side
+			SET $cliply = 0
+			CALC $cliply = $cliply + 1.4925
+			CALC $clipuy = $cliply + .015
+			REPEAT $clipuy < $uyl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $lx,$cliply,$ux,$clipuy
+				END
+				CALC $cliply = $cliply + 1.5
+				CALC $clipuy = $cliply + .015
+				CALC $cnt = $cnt + 1
+			END
+		END
+	ELSE
+		#DO Even Vertical Clipping
+		SET $cliply = 0
+		CALC $cliply = $cliply - .7575
+		CALC $clipuy = $cliply + .015
+		CLIP
+			By $$WINDOWMODE
+			Boundary $$YES
+			Flashes $$NO
+			Draws $$YES
+			POLYS $$YES
+			Layer $layer
+			GO $lx,$cliply,$ux,$clipuy
+		END
+		CALC $cnt = $cnt + 1
+		REPEAT $cnt <= $tabsX 
+			#left side
+			CALC $cliply = $cliply - 1.5075
+			CALC $clipuy = $cliply + .015
+			REPEAT $cliply > $lyl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $lx,$cliply,$ux,$clipuy
+				END
+				CALC $cnt = $cnt + 1
+				CALC $cliply = $cliply - 1.5075
+				CALC $clipuy = $cliply  + .015
+			END
+			#right side
+			SET $cliply = 0
+			CALC $cliply = $cliply + .7575
+			CALC $clipuy = $cliply + .015
+			REPEAT $clipuy < $uyl
+				CLIP
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes $$NO
+					Draws $$YES
+					POLYS $$YES
+					Layer $layer
+					GO $lx,$cliply,$ux,$clipuy
+				END
+				CALC $cliply = $cliply + 1.5
+				CALC $clipuy = $cliply + .015
+				CALC $cnt = $cnt + 1
+			END
+		END
+	END
+ENDMACRO
+MACRO _IsEven
+	SET $even = 2
+	SET $2 = $$NO
+	REPEAT $even < 21
+		IF $1 == $even
+			SET $2 = $$YES
+		END
+		CALC $even = $even + 2
+	END
+ENDMACRO
+MACRO _FoilVis
+	SET $foil = $1
+	LAYERN $foil
+		VISIBILITY 1
+	END
+	SET $layer = 1
+	REPEAT $layer <= $$MAXLAYERS
+		IF $layer != $foil
+			LAYERN $layer
+				VISIBILITY 0
+			END
+
+		END
+		CALC $layer = $layer + 1
+	END
+ENDMACRO

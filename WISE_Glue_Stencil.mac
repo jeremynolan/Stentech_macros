@@ -1,0 +1,749 @@
+MACRO Glue_Stencil
+	# Version 2.1 10/24/24 updated to remove helper utilities that are also loaded by the quicktext macro.
+	# Version 2.0 5/8/2018 updated for 16.9 for better flow and to increase options 
+	# Version 1.1 8/14/06 updated for version 15.0
+	# Version 1.0 4/14/03 written by Stan Keightley Jr for WISE SOFTWARE Solutions, Inc.
+	#	 _______
+	#	|	   |
+	#	|	   |	       
+	#	|_______|	        	
+	#			          \      ________
+	#		       ========>    |_______|
+	#	 _______                   /        
+	#	|	   |
+	#	|	   |
+	#	|_______|
+	#
+	# This macro was designed to assist in the automatic conversion of smt pad shapes for stencil design purposes.
+	# Current Version Written by Stan Keightley, WISE Software Solutions, Copyright 2003-2018
+
+	SET	$result = 0
+	SET	$newDx = 0
+	SET	$newDy = 0
+	SET	$extX = 0
+	SET	$extY = 0
+	SET 	$ScratchLayer = 0
+	SET	$usedDcode= 0
+	STRARRAY $StrArray1(2) #glue style
+	STRCPY $StrArray1(1), "Line"
+	STRCPY $StrArray1(2), "Dots"
+	#STRCPY $StrArray1(3), "Offset Dots"
+
+	STRARRAY $StrArray2(2) #glue style
+	STRCPY $StrArray2(1), "Oblongs"
+	STRCPY $StrArray2(2), "Rounds"
+
+	SET	$$STATUS = 0
+	REPEAT	$$STATUS == 0 
+		GetValue   	"Enter Input Layer:", $layer
+		ActiveLayer	$layer
+	END
+	GETDESIGNPROPERTY "GlueLayer", $glue
+	IF $$STATUS == 0
+		SET $GlueLayer = 0
+	ELSE
+		STRREAD $glue, "%n", $GlueLayer 
+	END
+	GETDESIGNPROPERTY "ConversionLayer", $conv
+	IF $$STATUS == 0
+		SET $ConvertLayer = 0
+	ELSE
+		STRREAD $conv, "%n", $ConvertLayer
+	END
+	SET $$STATUS = 0
+	REPEAT	$$STATUS == 0
+		IF $GlueLayer == 0
+			GETFREELAYER $GlueLayer
+			PUTDESIGNPROPERTY "GlueLayer", $GlueLayer
+		END
+		LAYERN $GlueLayer
+			LYRNAME "Glue"
+			VISIBILITY $$YES
+		END
+		IF $ConvertLayer== 0
+			GETFREELAYER $ConvertLayer
+			PUTDESIGNPROPERTY "ConversionLayer", $ConvertLayer
+		END
+		LAYERN $ConvertLayer
+			LYRNAME "Conversion Layer"
+		END
+		GETFREELAYER $ScratchLayer
+		ActiveLayer	$ScratchLayer
+	END
+	COPYLAYER $layer, $ConvertLayer
+	SELECTGROUP
+		# set the selection criteria outside of the main repeat loop
+		By		$$WINDOWMODE
+		Boundary	$$NO
+		REMOVETYPES	0
+		Flashes 	$$TRUE
+		DCODE	0
+		Layer		$layer
+
+	END
+
+	MESSAGEBOX		"Window Components", "Please window around the desired component pads to convert. Press Esc to end.", 1
+	IF	$$STATUS == $$NO
+		STOP	"Glue Stencil Macro Terminated"
+	ELSE
+		REPEAT $$TRUE
+			GetWindow "Glue Stencil Macro: Window around component to be converted. Esc to end.", $windowx1, $windowy1, $windowx2, $windowy2
+			SELECTGROUP
+				Boundary	$$NO
+				MODE	0
+				GO
+				MODE	1
+				GO  	$windowx1, $windowy1, $windowx2, $windowy2
+			END
+
+			IF $$SELGRPCNT > 1
+				SET $sgrpcnt = $$SELGRPCNT
+				COPY
+					By	$$GROUPMODE
+					Tolayer	$ScratchLayer
+					GO	0,0,0,0
+				END
+				GETEXTENTS $ScratchLayer, $extLx, $extLy, $extUx, $extUy
+				CALLMACRO _AbsDiff, $extUx, $extLx, $extX
+				CALLMACRO _AbsDiff, $extUy, $extLy, $extY
+
+				IF	$sgrpcnt == 2 	#Handle regular passives with any (0,90) orientation
+					#Check for stored preferences
+					STRSET $thick, ".5"
+					STRSET $width, "1"
+					GETDESIGNPROPERTY "Width 2pin", $width
+					IF $$STATUS == 0
+						#Or pop dialog to find and store preferences for 2-pin parts
+						SET $FormId = -1
+						SET $Edit1 = -1
+						SET $Edit2 = -1
+						SET $Button1 = -1
+						SET $Button2 = -1
+						SET $Static1 = -1
+						SET $Static2 = -1
+						SET $Static3 = -1
+						SET $Button1Clicked = $$FALSE
+						SET $Button2Clicked = $$FALSE
+						STRSET $thick, ".5"
+						STRSET $width, "1"
+						DEFINEFORM 
+							FORMID		$FormId 
+							TITLE			"2 pin preferences (.5 = 50%) "
+							MARGIN		0.25
+							STATICTEXT		$Static1, -.1, 0.05, 2.25, 0.25, "Glue thickness = % of span", $$TRUE
+							EDITCONTROL	$Edit1,   2.35, .0, .3, 0.25, $thick
+							STATICTEXT		$Static3, 0.0, 0.55, 2.25, 0.25, "Glue width = % of land width", $$TRUE
+							EDITCONTROL	$Edit2,   2.35, .5, .3, 0.25, $width
+							STATICTEXT		$Static2, .15, 1.0, 2.75, 0.25, "Keep these settings for all 2 pin parts?", $$FALSE
+							BUTTONCONTROL	$Button1, .835, 1.5, 0.50, 0.435, "Yes", $Button1Clicked 
+							BUTTONCONTROL	$Button2, 1.335, 1.5, 0.50, 0.435, "No", $Button2Clicked 
+						END
+						OpenForm $FormId
+						#Store preferences
+						IF $Button1Clicked == $$YES
+							PUTDESIGNPROPERTY "Width 2pin", $width
+							PUTDESIGNPROPERTY "Thickness 2pin", $thick
+						END
+					ELSE
+						GETDESIGNPROPERTY "Thickness 2pin", $thick
+					END
+					#Convert Strings
+					STRREAD $thick, "%n", $thk
+					STRREAD $width, "%n", $wide
+					#Process data
+					GETFIRSTITEM $ScratchLayer, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+					SET	$pass1dcode = $dcode
+					SET	$pass1x = $x
+					SET	$pass1y = $y
+					GETNEXTITEM
+					SET	$pass2dcode = $dcode
+					SET	$pass2x = $x
+					SET	$pass2y = $y
+					GETDCODEINFO $pass1dcode, $shp, $custom, $pass1xs, $pass1ys, $type, $used, $flags, $scratch
+					GETDCODEINFO $pass2dcode, $shp, $custom, $pass2xs, $pass2ys, $type, $used, $flags, $scratch
+					#Are the 2 X's the same value?
+					CALLMACRO _FuzzyTest, $pass1x, $pass2x, $result
+					IF	$result ==1
+						CALLMACRO _NewPassDcode, $newDy, $extY, $pass1ys, $pass2ys, $thk
+						CALC $newDx = $extX * $wide# Multiply here to reduce glue aperture below 100% width ( for example, * 0.9)
+						CALLMACRO _Convert, $newDx, $newDy, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $GlueLayer
+
+					ELSE
+						#Are the 2 Y's the same value?
+						CALLMACRO _FuzzyTest, $pass1y, $pass2y, $result
+						IF	$result ==1
+							CALLMACRO _NewPassDcode, $newDx, $extX, $pass1xs, $pass2xs, $thk
+							CALC $newDy = $extY * $wide # Multiply here to reduce glue aperture below 100% width ( for example, * 0.9)
+							CALLMACRO _Convert, $newDx, $newDy, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $GlueLayer
+						ELSE
+							#Neither X's or Y's are same, so this is invalid (possibly rotated)
+							MESSAGEBOX "Invalid Selection", "These 2 pads do not make up a properly oriented component. Please try again.", 1
+							IF	$$STATUS == $$NO
+								STOP	"Glue Stencil Macro has been stopped"
+							END
+							ERASE
+								By		$$WINDOWMODE
+								REMOVETYPES	0
+								FLASHES	$$TRUE
+								DCODE		0
+								LAYER 		$ScratchLayer
+								GO		$windowx1, $windowy1, $windowx2, $windowy2
+							END
+						END
+					END
+
+				ELSE
+
+					IF 	$sgrpcnt == 3  	#Handle SOT shapes with any (0,90,180,270) orientation
+						#Check for stored preferences
+						STRSET $style, ""
+						STRSET $thick3, ""
+						STRSET $width3, ""
+						GETDESIGNPROPERTY "Style 3pin", $style
+						IF $$STATUS == 0
+							#Or pop dialog to find and store preferences for 3-pin parts
+							STRSET $thick3, ".5"
+							STRSET $width3, ".75"
+							SET $FormId = -1
+							SET $Edit1 = -1
+							SET $Edit2 = -1
+							SET $Button1 = -1
+							SET $Button2 = -1
+							SET $Drop1 = -1
+							SET $choice = -1
+							SET $Static1 = -1
+							SET $Static2 = -1
+							SET $Static3 = -1
+							SET $Button1Clicked = $$FALSE
+							SET $Button2Clicked = $$FALSE
+							DEFINEFORM 
+								FORMID		$FormId 
+								TITLE			"3 pin preferences (.5 = 50%) "
+								MARGIN		0.25
+								STATICTEXT		$Static2, 0.0, 0.05, 1.25, 0.25, "Choose glue style:", $$TRUE
+								DROPLISTCONTROL	$Drop1,  1.5, 0.0, 1.0, 0.25, $StrArray1, $choice 
+								STATICTEXT		$Static1, -.1, 0.55, 2.25, 0.25, "Thickness\diameter = % of span", $$TRUE
+								EDITCONTROL	$Edit1,   2.35, .5, .3, 0.25, $thick3
+								STATICTEXT		$Static3, 0.0, 1.05, 2.25, 0.25, "Glue width = % of land width", $$TRUE
+								EDITCONTROL	$Edit2,   2.35, 1.0, .3, 0.25, $width3
+								STATICTEXT		$Static2, .15, 1.5, 2.75, 0.25, "Keep these settings for all 3 pin parts?", $$FALSE
+								BUTTONCONTROL	$Button1, .835, 2.0, 0.50, 0.435, "Yes", $Button1Clicked 
+								BUTTONCONTROL	$Button2, 1.335, 2.0, 0.50, 0.435, "No", $Button2Clicked 
+							END
+							OpenForm $FormId
+							#Store preferences
+							IF $Button1Clicked == $$YES
+								PUTDESIGNPROPERTY "Style 3pin", $StrArray1($choice)
+								PUTDESIGNPROPERTY "Width 3pin", $width3
+								PUTDESIGNPROPERTY "Thickness 3pin", $thick3
+							END
+							#Convert Strings to values
+							IF $choice < 0
+								STOP	"Glue Stencil Macro has been stopped. A glue style choice is required."
+							END
+							STRCMP $StrArray1($choice), "Line"
+							IF $$STATUS ==0
+								SET $option = 1
+							END
+							STRCMP $StrArray1($choice), "Dots"
+							IF $$STATUS ==0
+								SET $option = 2
+							END
+							STRCMP $StrArray1($choice), "Offset Dots"
+							IF $$STATUS ==0
+								SET $option = 3
+							END
+						ELSE
+							GETDESIGNPROPERTY "Width 3pin", $width3
+							GETDESIGNPROPERTY "Thickness 3pin", $thick3
+						END
+						#Convert stored strings to values
+						STRCMP $style, "Line"
+						IF $$STATUS == 0
+							SET $option = 1
+						END
+						STRCMP $style,"Dots"
+						IF $$STATUS ==0
+							SET $option = 2
+						END
+						STRCMP $style, "Offset Dots"
+						IF $$STATUS ==0
+							SET $option = 3
+						END
+						STRREAD $thick3, "%n", $thk
+						STRREAD $width3, "%n", $wide
+
+						#Analyze and process data selected
+						GETFIRSTITEM $ScratchLayer, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+						SET	$sot1dcode = $dcode
+						SET	$sot1x = $x
+						SET	$sot1y = $y
+						GETDCODEINFO $sot1dcode, $shp, $custom, $sot1xs, $sot1ys, $type, $used, $flags, $scratch
+
+						GETNEXTITEM
+						SET	$sot2dcode = $dcode
+						SET	$sot2x = $x
+						SET	$sot2y = $y
+						GETDCODEINFO $sot2dcode, $shp, $custom, $sot2xs, $sot2ys, $type, $used, $flags, $scratch
+
+						GETNEXTITEM
+						SET	$sot3dcode = $dcode
+						SET	$sot3x = $x
+						SET	$sot3y = $y
+						GETDCODEINFO $sot3dcode, $shp, $custom, $sot3xs, $sot3ys, $type, $used, $flags, $scratch
+						CALLMACRO _FuzzyTest, $sot1x, $sot2x, $result 
+						IF	$result ==1
+							CALC $newDy = $extY * $wide
+							CALLMACRO _NewSOTDcode, $newDx, $extX, $sot1xs, $sot2xs, $thk
+						ELSE
+							CALLMACRO _FuzzyTest, $sot1x, $sot3x, $result
+							IF	$result ==1
+								CALLMACRO _NewSOTDcode, $newDx, $extX, $sot1xs, $sot3xs, $thk
+								CALC $newDy = $extY * $wide
+							ELSE
+								CALLMACRO _FuzzyTest, $sot2x, $sot3x, $result
+								IF	$result ==1
+									CALLMACRO _NewSOTDcode, $newDx, $extX, $sot2xs, $sot3xs, $thk
+									CALC $newDy = $extY * $wide
+								ELSE
+									CALLMACRO _FuzzyTest, $sot1y, $sot2y, $result
+									IF	$result ==1
+										CALLMACRO _NewSOTDcode, $newDy, $extY, $sot1ys, $sot2ys, $thk
+										CALC $newDx = $extX * $wide
+									ELSE
+										CALLMACRO _FuzzyTest, $sot1y, $sot3y, $result
+										IF	$result ==1
+											CALLMACRO _NewSOTDcode, $newDy, $extY, $sot1ys, $sot3ys, $thk
+											CALC $newDx = $extX * $wide
+										ELSE
+											CALLMACRO _FuzzyTest, $sot2y, $sot3y, $result
+											IF	$result ==1
+												CALLMACRO _NewSOTDcode, $newDy, $extY, $sot2ys, $sot3ys, $thk
+												CALC $newDx = $extX * $wide
+											ELSE
+												MESSAGEBOX "Invalid Selection", "These 3 pads do not appear to make up a SOT that this macro understands.", 1
+												IF	$$STATUS == $$NO
+													STOP	"Glue Stencil Macro has been stopped"
+												END
+												ERASE
+													By		$$WINDOWMODE
+													REMOVETYPES	0
+													FLASHES	$$TRUE
+													DCODE	0
+													LAYER 	$ScratchLayer
+													GO		$windowx1, $windowy1, $windowx2, $windowy2
+												END
+												SET $option = 4 #skip
+												REDRAW
+											END
+										END
+									END
+								END
+							END
+						END
+						IF $option == 4 #skip conversion
+						ELSE
+							IF $option == 1
+								CALLMACRO _Convert, $newDx, $newDy, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $GlueLayer
+							END
+							IF $option == 2
+								IF $newDy > $newDx
+									SET $orient = 1
+									CALC $space = $newDy /3
+								ELSE
+									SET $orient = 2	
+									CALC $space = $newDx /3
+								END
+								CALLMACRO _ConvertICRound, $newDx, $newDy, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $usedDcode
+								ACTIVELAYER = $ConvertLayer
+								CALLMACRO _ICLoop, $ConvertLayer, $usedDcode, $orient, $space, $GlueLayer, $sgrpcnt
+							END
+							IF $option == 3
+								IF $newDy > $newDx
+									SET $orient = 1
+									CALC $space = $newDy /3
+								ELSE
+									SET $orient = 2	
+									CALC $space = $newDx /3
+								END
+								CALLMACRO _ConvertICRound, $newDx, $newDy, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $usedDcode
+								CALLMACRO _ICLoopStaggered, $ConvertLayer, $usedDcode, $orient, $space, $GlueLayer, $sgrpcnt
+							END
+						END
+					ELSE	
+						#$sgrpcnt must be > 3, so handle IC types, see printout of drawing for variable details
+						STRSET $styleIC, ""
+						STRSET $thickIC, ""
+						STRSET $widthIC, ""
+						GETDESIGNPROPERTY "Style IC", $styleIC
+						IF $$STATUS == 0
+							#Or pop dialog to find and store preferences for 3-pin parts
+							STRSET $thickIC, ".25"
+							STRSET $widthIC, ".75"
+							SET $FormId = -1
+							SET $Edit1 = -1
+							SET $Edit2 = -1
+							SET $Button1 = -1
+							SET $Button2 = -1
+							SET $Drop1 = -1
+							SET $choice = -1
+							SET $Static1 = -1
+							SET $Static2 = -1
+							SET $Static3 = -1
+							SET $Button1Clicked = $$FALSE
+							SET $Button2Clicked = $$FALSE
+							DEFINEFORM 
+								FORMID		$FormId 
+								TITLE			"Multi pin preferences (.5 = 50%) "
+								MARGIN		0.25
+								STATICTEXT		$Static2, 0.0, 0.05, 1.25, 0.25, "Choose glue style:", $$TRUE
+								DROPLISTCONTROL	$Drop1,  1.5, 0.0, 1.0, 0.25, $StrArray2, $choice 
+								STATICTEXT		$Static1, -.1, 0.55, 2.25, 0.25, "Thickness\diameter = % of span", $$TRUE
+								EDITCONTROL	$Edit1,   2.35, .5, .3, 0.25, $thickIC
+								STATICTEXT		$Static3, 0.0, 1.05, 2.25, 0.25, "Glue width = % of land width", $$TRUE
+								EDITCONTROL	$Edit2,   2.35, 1.0, .3, 0.25, $widthIC
+								STATICTEXT		$Static2, .15, 1.5, 2.75, 0.25, "Keep these settings for all multi pin parts?", $$FALSE
+								BUTTONCONTROL	$Button1, .835, 2.0, 0.50, 0.435, "Yes", $Button1Clicked 
+								BUTTONCONTROL	$Button2, 1.335, 2.0, 0.50, 0.435, "No", $Button2Clicked 
+							END
+							OpenForm $FormId
+							#Store preferences
+							IF $Button1Clicked == $$YES
+								PUTDESIGNPROPERTY "Style IC", $StrArray2($choice)
+								PUTDESIGNPROPERTY "Width IC", $widthIC
+								PUTDESIGNPROPERTY "Thickness IC", $thickIC
+							END
+							#Convert Strings to values
+							IF $choice < 0
+								STOP	"Glue Stencil Macro has been stopped. A glue style choice is required."
+							END
+							STRCMP $StrArray2($choice), "Oblongs"
+							IF $$STATUS ==0
+								SET $option = 1
+							END
+							STRCMP $StrArray2($choice), "Rounds"
+							IF $$STATUS ==0
+								SET $option = 2
+							END
+						ELSE
+							GETDESIGNPROPERTY "Width IC", $widthIC
+							GETDESIGNPROPERTY "Thickness IC", $thickIC
+						END
+						#Convert stored strings to values
+						STRCMP $styleIC, "Oblongs"
+						IF $$STATUS == 0
+							SET $option = 1
+						END
+						STRCMP $styleIC,"Rounds"
+						IF $$STATUS ==0
+							SET $option = 2
+						END
+						STRREAD $thickIC, "%n", $thk
+						STRREAD $widthIC, "%n", $wide
+
+						GETFIRSTITEM $ScratchLayer, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+						GETDCODEINFO $dcode, $shp, $custom, $ICxs, $ICys, $type, $used, $flags, $scratch
+
+						IF	$ICxs > $ICys	#IC is vertically oriented
+							SET $orient = 1
+							CALC $a = $extY
+							CALC $g = $extX
+							CALC $h = $ICxs
+						ELSE
+							SET $orient = 2
+							CALC $a = $extX
+							CALC $g = $extY
+							CALC $h = $ICys
+						END
+
+						CALC $b = $a * $wide
+						CALC $c = $b * .2
+						CALC $hx2 = $h * 2
+						CALC $d = $g - $hx2
+						CALC $e = $d * $thk
+						CALC $f = $b * .4
+
+						IF $orient == 1
+							IF $option == 1
+								CALLMACRO _ConvertIC, $e, $c, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $usedDcode
+							ELSE
+								CALLMACRO _ConvertICRound, $e, $c, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $usedDcode
+							END
+							ACTIVELAYER = $GlueLayer
+							CALLMACRO _ICLoop, $ConvertLayer, $usedDcode, $orient, $f, $GlueLayer, $sgrpcnt
+						ELSE
+							IF $option == 1
+								CALLMACRO _ConvertIC, $c, $e, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $usedDcode
+							ELSE
+								CALLMACRO _ConvertICRound, $c, $e, $ConvertLayer, $ScratchLayer, $windowx1, $windowy1, $windowx2, $windowy2, $usedDcode
+							END
+							ACTIVELAYER = $GlueLayer
+							CALLMACRO _ICLoop, $ConvertLayer, $usedDcode, $orient, $f, $GlueLayer, $sgrpcnt
+						END
+						REDRAW
+					END
+				END
+			ELSE
+				MESSAGEBOX "Invalid Selection", "You need to select at least 2 flashes...", 1
+				IF	$$STATUS == $$NO
+					STOP	"Glue Stencil Macro has been stopped"
+				END
+			END
+		END
+	END
+ENDMACRO
+MACRO _ICLoop
+	#$ConvertLayer, $usedDcode, $orient, $space, $GlueLayer, $sgrpcnt
+	# ^^ Input variables ^^ 
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET $seqno = 1
+	SET $HighestSeqNo = 1
+	CALLMACRO _HighestSeqNo, $1, $HighestSeqNo
+	ACTIVELAYER $1
+	CURRENTDCODE $2
+	GETFIRSTITEM $1, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+	REPEAT $$STATUS == $$TRUE
+		IF $seqno <= $HighestSeqNo
+			IF $2 == $dcode
+				IF $6 < 4
+					IF	$3 == 1
+						CALC $newy1 = $y + $4
+						CALC $newy2 = $y - $4
+						ADDFLASH $x, $newy1
+						ADDFLASH $x, $newy2
+					ELSE
+						CALC $newx1 = $x + $4
+						CALC $newx2 = $x - $4
+						ADDFLASH $newx1, $y
+						ADDFLASH $newx2, $y
+					END
+				ELSE
+					IF $6 > 10
+						IF $6 < 20
+							IF	$3 == 1
+								CALC $newy1 = $y + $4
+								CALC $newy2 = $y - $4
+								ADDFLASH $x, $newy1
+								ADDFLASH $x, $newy2
+								DELETEITEM $1, $seqno
+							ELSE
+								CALC $newx1 = $x + $4
+								CALC $newx2 = $x - $4
+								ADDFLASH $newx1, $y
+								ADDFLASH $newx2, $y
+								DELETEITEM $1, $seqno
+							END
+						END
+					END
+					IF $6 > 20
+						IF	$3 == 1
+							CALC $newy1 = $y + $4
+							CALC $newy2 = $y - $4
+							ADDFLASH $x, $newy1
+							ADDFLASH $x, $newy2
+						ELSE
+							CALC $newx1 = $x + $4
+							CALC $newx2 = $x - $4
+							ADDFLASH $newx1, $y
+							ADDFLASH $newx2, $y
+						END
+					END
+				END
+			END
+		END
+		GETNEXTITEM
+	END
+	GETEXTENTS -1, $lx, $ly, $ux, $uy
+	MOVE
+		By $$WINDOWMODE
+		Boundary $$NO
+		Layer $1
+		TOLAYER $5
+		Dcode $2
+		INPLACE $$YES
+		GO $lx,$ly,$ux,$uy
+	END
+ENDMACRO
+
+MACRO _Convert
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET	$newDcode = 0
+	GETFREEDCODE $newDcode 
+	GETDCODEINFO $newDcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	PUTDCODEINFO $newDcode, $$OBLONG, $cus, $1, $2, $type, $used, $flags, $scratch
+	DRAWNPADS
+		METHOD	2
+		REPLACEROTATED	$$YES
+		NEWDCODE	$newDcode
+		TOLERANCE	0.004
+		BY 		$$WINDOWMODE
+		BOUNDARY 	$$NO
+		DRAWS	$$NO
+		ARCS 		$$NO
+		DCODE 	0
+		LAYER 	$3
+		GO		$5, $6, $7, $8
+	END
+	ERASE
+		By		$$WINDOWMODE
+		REMOVETYPES	0
+		FLASHES	$$TRUE
+		DCODE		0
+		LAYER 		$4
+		GO		$5, $6, $7, $8
+	END
+	REDRAW
+	GETEXTENTS -1, $lx, $ly, $ux, $uy
+	MOVE
+		By $$WINDOWMODE
+		Boundary $$NO
+		Layer $3
+		TOLAYER $9
+		Dcode $newDcode
+		INPLACE $$YES
+		GO $lx,$ly,$ux,$uy
+	END
+ENDMACRO
+MACRO _ConvertICRound
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET	$newDcode = 0
+	GETFREEDCODE $newDcode 
+	GETDCODEINFO $newDcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	PUTDCODEINFO $newDcode, $$ROUND, $cus, $1, $1, $type, $used, $flags, $scratch
+	DRAWNPADS
+		METHOD	2
+		REPLACEROTATED	$$NO
+		NEWDCODE	$newDcode
+		TOLERANCE	0.004
+		BY 		$$WINDOWMODE
+		BOUNDARY 	$$NO
+		DRAWS		$$NO
+		ARCS 		$$NO
+		DCODE 		0
+		LAYER 		$3
+		GO		$5, $6, $7, $8
+	END
+	ERASE
+		By		$$WINDOWMODE
+		REMOVETYPES	0
+		FLASHES	$$TRUE
+		DCODE		0
+		LAYER 		$4
+		GO		$5, $6, $7, $8
+	END
+	REDRAW
+	CALC	$9 = $newDcode
+ENDMACRO
+MACRO _ConvertIC
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET	$newDcode = 0
+	GETFREEDCODE $newDcode 
+	GETDCODEINFO $newDcode, $shp, $cus, $tempx, $tempy, $type, $used, $flags, $scratch
+	PUTDCODEINFO $newDcode, $$OBLONG, $cus, $1, $2, $type, $used, $flags, $scratch
+	DRAWNPADS
+		METHOD	2
+		REPLACEROTATED	$$NO
+		NEWDCODE	$newDcode
+		TOLERANCE	0.004
+		BY 		$$WINDOWMODE
+		BOUNDARY 	$$NO
+		DRAWS		$$NO
+		ARCS 		$$NO
+		DCODE 		0
+		LAYER 		$3
+		GO		$5, $6, $7, $8
+	END
+	ERASE
+		By		$$WINDOWMODE
+		REMOVETYPES	0
+		FLASHES	$$TRUE
+		DCODE		0
+		LAYER 		$4
+		GO		$5, $6, $7, $8
+	END
+	REDRAW
+	CALC	$9 = $newDcode
+ENDMACRO
+MACRO _NewPassDcode
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	CALC $1 = $2 - $3
+	CALC $1 = $1 - $4
+	CALC $1 = $1 * $5
+END
+ENDMACRO
+
+MACRO _NewSOTDcode
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	CALC $1 = $2 - $3
+	CALC $1 = $1 - $4
+	CALC $1 = $1 * $5
+END
+ENDMACRO
+
+MACRO _HighestSeqNo
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	Set $$STATUS = $$TRUE
+	GETFIRSTITEM $1, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+	REPEAT $$STATUS == $$TRUE
+		CALC	$2 = $seqno
+		GETNEXTITEM
+	END
+ENDMACRO
+
+MACRO _ICLoopStaggered #Not working because I need to know full orientation instead of just H or V
+	#$GlueLayer, $usedDcode, $orient, $f
+	# ^^ Input variables ^^ 
+	IF $$CALLDEPTH == 0
+		STOP "This macro must be called from another macro..."
+	END
+	SET $seqno = 1
+	SET $HighestSeqNo = 1
+	CALLMACRO _HighestSeqNo, $1, $HighestSeqNo
+	ACTIVELAYER $1
+	CURRENTDCODE $2
+	GETFIRSTITEM $1, $seqno, $net, $dcode, $type, $x, $y, $x2, $y2, $dia, $cw, $flags
+	REPEAT $$STATUS == $$TRUE
+		IF $seqno <= $HighestSeqNo
+			IF $2 == $dcode
+				IF	$3 == 1
+					CALC $newy1 = $y + $4
+					CALC $newy2 = $y - $4
+					ADDFLASH $x, $newy1
+					ADDFLASH $x, $newy2
+					#MOVEITEM $1, $seqno, $dx, $dy
+
+				ELSE
+					CALC $newx1 = $x + $4
+					CALC $newx2 = $x - $4
+					ADDFLASH $newx1, $y
+					ADDFLASH $newx2, $y
+				END
+			END
+		END
+		GETNEXTITEM
+	END
+	GETEXTENTS -1, $lx, $ly, $ux, $uy, $$YES, $$YES
+	MOVE
+		By $$WINDOWMODE
+		Boundary $$YES
+		Layer $1
+		TOLAYER $5
+		Dcode $2
+		INPLACE $$YES
+		GO $lx,$ly,$ux,$uy
+	END
+ENDMACRO

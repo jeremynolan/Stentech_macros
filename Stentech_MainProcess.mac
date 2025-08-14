@@ -1,0 +1,546 @@
+MACRO StentechMainProcess
+    StrWrite $log, "StentechMainProcess Macro Called %s", $$TIME
+    LogMessage 0, $log
+    Undo $$NO
+    If $gSavedDSN == 1
+        # Processing needed to account for saved vcam design, ODB++, CAM350
+        # More to be done here
+        # SplitPath $$DSNNAME, $outfile, $gJobNumT, $ext
+    Else
+        SaveAs $$DSNNAME
+    End
+    If $gLayersPicked == 0
+        CALLMACRO StentechLayerPick
+        CALLMACRO CreateLayerSets
+        Set $gLayersPicked = 1
+    Else
+        GetYesNo "Re-run Layer Pick?\r\rLayer Pick has previously been run.\r\rChoose Yes to re-run if there were mistakes, No to keep existing set.", $yesNo
+        If $yesNo == $$YES
+            CALLMACRO StentechLayerPick
+            CALLMACRO CreateLayerSets
+        End
+    End
+    CALLMACRO SetLayerTypes
+    OverlayMode $$YES
+    PadRemoval
+        Type       "S" # stacked only
+        Layer      0
+        Dcode      0
+        WindowMode $$NO
+        Go
+    End
+    OverlayMode $$NO
+    Set $Clip = $$NO
+    If $gCADmatic
+        Set $Clip = $$NO
+    Else
+        MessageBox "Clip around border (or useful data)?", "Yes - Data outside window will be deleted on visible layers.\r\rNo - Skip data clipping.", 2
+        If $$STATUS == $$YES
+            Set $Clip = $$YES
+        End
+    End
+    If $Clip == $$YES
+        GetWindow "Window around border. Data outside window will be deleted on visible layers.", $lx,$ly, $ux,$uy
+        Clip
+            Boundary      $$NO
+            Outside       $$YES
+            Type          0
+            Flashes       $$YES
+            Draws         $$YES
+            Arcs          $$YES
+            Polys         $$YES
+            Text          $$YES
+            Drills        $$YES
+            Slots         $$YES
+            DrillCircles  $$YES
+            DrillText     $$YES
+            MillPaths     $$YES
+            MillCircles   $$YES
+            Layer         0
+            Dcode         0
+            Tool          0
+            Polarity      0
+            Go $lx,$ly, $ux,$uy
+        End
+    End
+    # Run Consolidate Vector Items
+    # Options: Tolerance, Layer
+    StrWrite $log, "Running UID on Top Paste Layer %.0n", $gOrigPasteT
+    LogMessage 0, $log
+    RunUid 1004, .001, $gOrigPasteT
+    StrWrite $log, "Running UID on Bottom Paste Layer %.0n", $gOrigPasteB
+    LogMessage 0, $log
+    RunUid 1004, .001, $gOrigPasteB
+    # RunUid 1004, .001, $gCopperT
+    # RunUid 1004, .001, $gCopperB
+    # RunUid 1004, .001, $gBorderT
+    # RunUid 1004, .001, $gBorderB
+    StrWrite $log, "Running UID on Top Silk Layer %.0n", $gSilkT
+    LogMessage 0, $log
+    RunUid 1004, .001, $gSilkT
+    StrWrite $log, "Running UID on Bottom Silk Layer %.0n", $gSilkB
+    LogMessage 0, $log
+    RunUid 1004, .001, $gSilkB
+    # Do we have Top, Bot, None, or Both Layers?
+    CALLMACRO _SetgPasteLayersO
+    # Identify if border layer has data and prompts user to select border if it should be copied from a visible layer
+    Set $NoBottom = 0
+    CALLMACRO _IDBorder, $NoBottom
+    # Center all data according to the border layer
+    CALLMACRO _CenterbyBorder, $gBorderT
+    ActiveLayer $gModPasteT
+    If $gCADmatic
+        # not needed for CADmatic users
+    Else
+        ViewAll
+    End
+    # Process Paste Layers
+    CALLMACRO _OPLayerToPolys
+    Set $tLayer = 32
+    Set $sLayer = 32
+    GetFreeLayer $tLayer
+    CALLMACRO _GetSecondEmptyLayer, $sLayer
+    Set $Repeat = 0
+    Set $layer = $gOrigPasteT
+    Repeat $Repeat < 2
+        If $gPasteLayers == 2
+            Set $Repeat = 1
+            Set $layer = $gOrigPasteB
+            DeleteLayer $gBorderT
+        End
+        If $Repeat == 1
+            # Mirror Backside for Squeegee View
+            CALLMACRO ViewBottom
+            # GetExtents 0, $lx,$ly, $ux,$uy
+            Set $value = $$YES
+            If $gCADmatic
+                Set $value = $$YES
+            Else
+                GetYesNo "Mirror bottom layers for squeegee view?", $value
+            End
+            If $gCADmatic
+                # not needed for CADmatic users
+            Else
+                ViewAll
+            End
+            If $value == $$YES
+                Layern $gCopperB
+                    Visibility 1
+                End
+                Layern $gSolderMaskB
+                    Visibility 1
+                End
+                CALLMACRO _MirrorLayer, $gCopperB
+                CALLMACRO _MirrorLayer, $gSolderMaskB
+                CALLMACRO _MirrorLayer, $gSilkB
+                CALLMACRO _MirrorLayer, $gOrigPasteB
+                CALLMACRO _MirrorLayer, $gBorderB
+                CALLMACRO _MirrorLayer, $gFidB
+                CALLMACRO _MirrorLayer, $gNCDrillB
+                Layern $gCopperB
+                    Visibility 0
+                End
+                Layern $gSolderMaskB
+                    Visibility 0
+                End
+            End
+        End
+        GetExtents $layer, $lx, $ly, $ux, $uy, $$YES, $$YES
+        SelectGroup
+            Mode 0
+            Go
+        End
+        SelectGroup
+            Mode          1
+            By            $$WINDOWMODE
+            Boundary      $$YES
+            Flashes       $$NO
+            Draws         $$YES
+            Arcs          $$YES
+            Polys         $$YES
+            Text          $$YES
+            Drills        $$YES
+            Slots         $$YES
+            DrillCircles  $$YES
+            DrillText     $$YES
+            MillPaths     $$YES
+            MillCircles   $$YES
+            Layer         $layer
+            Dcode         0 # Move all D-codes
+            Tool          0 # Move all tools
+            Polarity      0
+            Go $lx,$ly, $ux,$uy
+        End
+        If $$SELGRPCNT > 0
+            Move
+                By      $$GROUPMODE
+                Layer   $layer # Move from all visible layers
+                ToLayer $sLayer
+                Go 0,0, 0,0
+            End
+            Composite2Layer
+                CompositeLayer $sLayer
+                ToLayer        $tLayer
+                Method         0 # to polys
+                Go
+            End
+            AutoDrawnPads
+                ControlLayer   $tLayer
+                PasteExpansion 0.002
+                Layer          $tLayer
+                MaxSizeX       1.25
+                MaxSizeY       1.25
+                UseCustom      $$YES
+                Tolerance      0.0005
+                ReplaceRotated $$NO
+                Window         $$NO
+                Go
+            End
+            Move
+                By $$WINDOWMODE
+                Boundary  $$YES
+                Flashes   $$YES
+                Layer     $tLayer # Move from all visible layers
+                ToLayer   $layer
+                Dcode     0 # Move all D-codes
+                Tool      0 # Move all tools
+                Polarity  0
+                Go $lx,$ly ,$ux,$uy, 0,0, 0,0
+            End
+            Erase
+                Layer     $sLayer # Move from all visible layers
+                Dcode     0 # Move all D-codes
+                Tool      0 # Move all tools
+                Polarity  0
+                Go $lx,$ly ,$ux,$uy
+            End
+            SelectGroup
+                Mode 0
+                Go
+            End
+        End
+        Set $layer = $gOrigPasteB
+        If $NoBottom == $$NO
+            Set $Repeat = $Repeat + 1
+        Else
+            Set $Repeat = $Repeat + 2
+        End
+    End # Repeat
+    PadRemoval
+        Type "S" # stacked only
+        Layer $gOrigPasteT
+        Dcode 0
+        WindowMode $$NO
+        Go
+    End
+    PadRemoval NO
+        Type "S" # stacked only
+        Layer $gOrigPasteB
+        Dcode 0
+        WindowMode $$NO
+        Go
+    End
+    CustomsToIntrinsics 0.5, $gOrigPasteT
+    CustomsToIntrinsics 1, $gOrigPasteT
+    CustomsToIntrinsics 0.5, $gOrigPasteB
+    CustomsToIntrinsics 1, $gOrigPasteB
+    # ID Fids
+    Set $yesNo = $$NO
+    IsEmptyLayer $gFidT
+    If $$STATUS == $$YES
+        IsEmptyLayer $gFidB
+        If $$STATUS == $$YES
+            CALLMACRO ID_Fiducials
+        End
+    End
+    # CALLMACRO SetThickness
+    If $gCADmatic
+        # not needed for CADmatic users
+    Else
+        ViewAll
+    End
+    # Clear modified layers
+    CALLMACRO _ClearLayer, $gModPasteT, 1
+    CALLMACRO _ClearLayer, $gModPasteB, 1
+    # Get Shapeset, ID and Generate Paste or copy if "No_Edits" or "No Edits"
+    GetStencilShapeSetnames
+    Set $count = $$STATUS
+    If $count > 0
+        StrArray $shapeSetNameArray($count)
+        GetStencilShapeSetnames $shapeSetNameArray
+    End
+    Set $partIdTolerance = 0.0002
+    If $gPasteLayers == 1
+        If $gCADmatic
+            FileOpen $fShapeSet, "C:\\CADmatic\\ShapeSet.cmt", "r"
+            If $$STATUS != 0
+                FileRead $fShapeSet, "", $gShapeSet    # Get ShapeSet from ShapeSet.cmt
+                FileClose $fShapeSet
+                LogMessage 0, "CADmatic ShapeSet file read successfully"
+            Else
+                StrWrite $log, "Failed to read ShapeSet file at\r\r%s\r\r(ID:002)", $fShapeSet
+                LogMessage 3, $log
+            End
+        Else
+            GetListChoice "Select Shape Set for Paste Generation", $gShapeSet, $shapeSetNameArray
+        End
+        StrWrite $log, "$gShapeSet %s", $gShapeSet
+        LogMessage 0, $log
+        StrCmp $gShapeSet, "No_Edits"
+        If $$STATUS == 0
+            LogMessage 0, "No_Edits ShapeSet used"
+            Set $gNoLib = $$YES
+            CopyLayer $gOrigPasteT, $gModPasteT
+        Else
+            StrCmp $gShapeSet, "No Edits"
+            If $$STATUS == 0
+                LogMessage 0, "No Edits ShapeSet used"
+                Set $gNoLib = $$YES
+                CopyLayer $gOrigPasteT, $gModPasteT
+            Else
+                If $gCADmatic
+                    Set $amb = $$YES
+                Else
+                    GetYesNo "Does this design require directional edits on 2-pin parts?\r(homeplates, c-shapes, etc.)", $amb
+                End
+                PartIdByLib
+                    Run2Pin                $amb
+                    UseSilkscreen          $amb
+                    ReportUnidentifiedPads $$YES
+                    Tolerance              $partIdTolerance
+                    Go
+                End
+                GeneratePaste
+                    ShapeSet $gShapeSet  # shape set name, if none the current shape set is used
+                    Top         $$YES
+                    Bottom      $$NO
+                    UsePinShape $$YES
+                    Update      $$YES
+                    Go
+                End
+            End
+        End
+    End
+    If $gPasteLayers == 2
+        If $gCADmatic
+            FileOpen $fShapeSet, "C:\\CADmatic\\ShapeSet.cmt", "r"
+            If $$STATUS != 0
+                FileRead $fShapeSet, "", $gShapeSet    # Get ShapeSet from ShapeSet.cmt
+                FileClose $fShapeSet
+                LogMessage 0, "CADmatic ShapeSet file read successfully"
+            Else
+                StrWrite $log, "Failed to read ShapeSet file at\r\r%s\r\r(ID:002)", $fShapeSet
+                LogMessage 3, $log
+            End
+        Else
+            GetListChoice "Select Shape Set for Paste Generation", $gShapeSet, $shapeSetNameArray
+        End
+        StrWrite $log, "$gShapeSet %s", $gShapeSet
+        LogMessage 0, $log
+        StrCmp $gShapeSet, "No_Edits"
+        If $$STATUS == 0
+            LogMessage 0, "No_Edits ShapeSet used"
+            Set $gNoLib = $$YES
+            CopyLayer $gOrigPasteB, $gModPasteB
+        Else
+            StrCmp $gShapeSet, "No Edits"
+            If $$STATUS == 0
+                LogMessage 0, "No Edits ShapeSet used"
+                Set $gNoLib = $$YES
+                CopyLayer $gOrigPasteB, $gModPasteB
+            Else
+                If $gCADmatic
+                    Set $amb = $$YES
+                Else
+                    GetYesNo "Does this design require directional edits on 2-pin parts?\r(homeplates, c-shapes, etc.)", $amb
+                End
+                PartIdByLib
+                    Run2Pin                $amb
+                    UseSilkscreen          $amb
+                    ReportUnidentifiedPads $$YES
+                    Tolerance              $partIdTolerance
+                    Go
+                End
+                GeneratePaste
+                    ShapeSet $gShapeSet  # shape set name, if none the current shape set is used
+                    Top         $$NO
+                    Bottom      $$YES
+                    UsePinShape $$YES
+                    Update      $$YES
+                    Go
+                End
+            End
+        End
+    End
+    If $gPasteLayers == 3
+        If $gThickB == $gThickT
+            If $gCADmatic
+                FileOpen $fShapeSet, "C:\\CADmatic\\ShapeSet.cmt", "r"
+                If $$STATUS != 0
+                    FileRead $fShapeSet, "", $gShapeSet    # Get ShapeSet from ShapeSet.cmt
+                    FileClose $fShapeSet
+                    LogMessage 0, "CADmatic ShapeSet file read successfully"
+                Else
+                    StrWrite $log, "Failed to read user file at\r\r%s\r\r(ID:002)", $fShapeSet
+                    LogMessage 3, $log
+                End
+            Else
+                GetListChoice "Select Shape Set for Paste Generation", $gShapeSet, $shapeSetNameArray
+            End
+            StrWrite $log, "$gShapeSet %s", $gShapeSet
+            LogMessage 0, $log
+            StrCmp $gShapeSet, "No_Edits"
+            If $$STATUS == 0
+                LogMessage 0, "No_Edits ShapeSet used"
+                Set $gNoLib = $$YES
+                CopyLayer $gOrigPasteT, $gModPasteT
+                CopyLayer $gOrigPasteB, $gModPasteB
+            Else
+                StrCmp $gShapeSet, "No Edits"
+                If $$STATUS == 0
+                    LogMessage 0, "No Edits ShapeSet used"
+                    Set $gNoLib = $$YES
+                    CopyLayer $gOrigPasteT, $gModPasteT
+                    CopyLayer $gOrigPasteB, $gModPasteB
+                Else
+                    If $gCADmatic
+                        Set $amb = $$YES
+                    Else
+                        GetYesNo "Does this design require directional edits on 2-pin parts?\r(homeplates, c-shapes, etc.)", $amb
+                    End
+                    PartIdByLib
+                        Run2Pin                $amb
+                        UseSilkscreen          $amb
+                        ReportUnidentifiedPads $$YES
+                        Tolerance              $partIdTolerance
+                        Go
+                    End
+                    GeneratePaste
+                        ShapeSet $gShapeSet # shape set name, if none the current shape set is used
+                        Top         $$YES
+                        Bottom      $$YES
+                        UsePinShape $$YES
+                        Update      $$YES
+                        Go
+                    End
+                End
+            End
+        Else # Top and Bottom Thickness are different
+            If $gCADmatic
+                FileOpen $fShapeSet, "C:\\CADmatic\\ShapeSet.cmt", "r"
+                If $$STATUS != 0
+                    FileRead $fShapeSet, "", $gShapeSet    # Get ShapeSet from ShapeSet.cmt
+                    FileClose $fShapeSet
+                    LogMessage 0, "CADmatic ShapeSet file read successfully"
+                Else
+                    StrWrite $log, "Failed to read ShapeSet file at\r\r%s\r\r(ID:002)", $fShapeSet
+                    LogMessage 3, $log
+                End
+            Else
+                GetListChoice "Select Shape Set for Paste Generation", $gShapeSet, $shapeSetNameArray
+            End
+            StrWrite $log, "$gShapeSet %s", $gShapeSet
+            LogMessage 0, $log
+            StrCmp $gShapeSet, "No_Edits"
+            If $$STATUS == 0
+                LogMessage 0, "No_Edits ShapeSet used"
+                Set $gNoLib = $$YES
+                CopyLayer $gOrigPasteT, $gModPasteT
+            Else
+                StrCmp $gShapeSet, "No Edits"
+                If $$STATUS == 0
+                    LogMessage 0, "No Edits ShapeSet used"
+                    Set $gNoLib = $$YES
+                    CopyLayer $gOrigPasteT, $gModPasteT
+                Else
+                    If $gCADmatic
+                        Set $amb = $$YES
+                    Else
+                        GetYesNo "Does this design require directional edits on 2-pin parts?\r(homeplates, c-shapes, etc.)", $amb
+                    End
+                    PartIdByLib
+                        Run2Pin                $amb
+                        UseSilkscreen          $amb
+                        ReportUnidentifiedPads $$YES
+                        Tolerance              $partIdTolerance
+                        Go
+                    End
+                    GeneratePaste
+                        ShapeSet    $gShapeSet # shape set name, if none the current shape set is used
+                        Top         $$YES
+                        Bottom      $$NO
+                        UsePinShape $$YES
+                        Update      $$YES
+                        Go
+                    End
+                End
+            End
+            If $gCADmatic
+                StrSet $gShapeSetB, $gShapeSet
+            Else
+                GetListChoice "Choose the ShapeSet used for Bottom paste generation", $gShapeSetB, $shapeSetNameArray
+            End
+            StrWrite $log, "$gShapeSetB %s", $gShapeSetB
+            LogMessage 0, $log
+            StrCmp $gShapeSetB, "No_Edits"
+            If $$STATUS == 0
+                LogMessage 0, "No тАШNo_EditsтАЩ ShapeSet used for Bottom"
+                Set $gNoLib = $$YES
+                CopyLayer $gOrigPasteB, $gModPasteB
+            Else
+                StrCmp $gShapeSetB, "No Edits"
+                If $$STATUS == 0
+                    LogMessage 0, "No Edits ShapeSet used for Bottom"
+                    Set $gNoLib = $$YES
+                    CopyLayer $gOrigPasteB, $gModPasteB
+                Else
+                    GeneratePaste
+                        ShapeSet    $gShapeSetB # shape set name, if none the current shape set is used
+                        Top         $$NO
+                        Bottom      $$YES
+                        UsePinShape $$YES
+                        Update      $$YES
+                        Go
+                    End
+                End
+            End
+        End
+    End
+    PutDesignProperty "Shape Set:", $gShapeSet
+    PutDesignProperty "Shape SetB:", $gShapeSetB
+    Pad2Pad
+        Spacing   0.008
+        MaxErrors 150
+        Layer     $gModPasteT
+        Layer     $gModPasteB
+        Go
+    End
+    If $gPasteLayers == 2
+        CALLMACRO ViewBottom
+    Else
+        CALLMACRO MainVis
+    End
+    SaveAs $$DSNNAME
+    CALLMACRO _CleanModified
+    MessageBox "Automatic Processing Complete", "Please review the analysis tab of the navigator for any pads not identified and/or spacing violations. \rCheck the Paste Report for issues. \r\rPress (F8) to regenerate Modified Paste Layer or run \rAssemblyStencilGenerate from the macro menu if necessary after fixing issues. \r\rOnce verified press (F3) to generate the check plot or run \rCheckPlot from the macro menu.", 0
+    If $gCADmatic
+        # not needed for CADmatic users
+    Else
+        ViewAll
+    End
+    If $gNoLib == $$YES
+        If $gCADmatic
+            # CADmatic does not need this reminder
+        Else
+            MessageBox "No Edits reminder", "The Original Paste Layer(s) copied to the Modified Paste Layer(s).\r\rPlease double check the layers for any data that shouldn't be cut.", 0
+        End
+    End
+    CALLMACRO ResetSelect
+    StrWrite $log, "Main Process complete, %s", $$DATE
+    LogMessage 0, $log
+    If $gCADmatic
+        Undo $$NO
+    Else
+        Undo $$YES
+    End
+ENDMACRO

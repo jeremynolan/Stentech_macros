@@ -1,0 +1,104 @@
+MACRO ConvertDrawnPadsForPasteAndMask
+	####################################################################
+	# This macro was written to optimize the drawn pad conversion process for a          #
+	# given solder or paste mask layer, solder or paste, keeping custom aps minimal  #                                 
+	# Written by Stan M. Keightley Jr. for WISE Software Solutions, Inc. May 2014       #
+	# Current version 1.2 updated 2/22/2024                                                                   #
+	###################################################################
+
+	SET	$slayer = 0
+	SET	$tlayer = 0
+	SET	$Repeat = $$YES
+	#MESSAGEBOX "CDP Enhanced for Mask Layers", "This macro will modify the aperture table and remove the option to undo\nContinue?", 2, 1 # default to the 'Yes' button.
+	#IF $$STATUS == $$NO
+	#	STOP
+	#END
+	#MESSAGEBOX "CDP Enhanced for Mask Layers", "Would you like to save your design and create a backup copy of this design in the current directory?", 2, 1 # default to the 'Yes' button.
+	#IF $$STATUS == $$YES
+	#	STRSET $dsn, $$DSNNAME
+	#	STRSET $backupdsn, $$DSNNAME
+	#	STRCAT $backupdsn, "_Backup"
+	#	SAVEAS $backupdsn
+	#	SAVEAS $dsn
+	#END
+	SET	$$STATUS = 0
+	REPEAT	$$STATUS == 0
+		GetValue   	"Enter Input Layer:", $layer
+		ActiveLayer	$layer
+
+		GETEXTENTS $layer, $lx, $ly, $ux, $uy, $$YES, $$YES
+
+		GETFREELAYER $slayer
+
+		MOVE
+			By $$WINDOWMODE
+			Boundary $$YES
+			FLASHES $$NO
+			DRAWS $$YES
+			ARCS $$YES
+			POLYS $$YES
+			TEXT $$YES
+			DRILLS $$YES
+			SLOTS $$YES
+			DRILLCIRCLES $$YES
+			DRILLTEXT $$YES
+			MILLPATHS $$YES
+			MILLCIRCLES $$YES
+			Layer $layer # Move from all visible layers
+			TOLAYER $slayer
+			Dcode 0 # Move all D-codes
+			Tool 0 # Move all tools
+			Polarity 0
+			GO $lx,$ly,$ux,$uy, 0, 0, 0, 0
+		END
+
+		GETFREELAYER $tlayer
+
+		COMPOSITE2LAYER
+			CompositeLayer $slayer
+			ToLayer $tlayer
+			Method 0 # to polys
+			GO
+		END
+		AUTODRAWNPADS
+			ControlLayer $tlayer
+			PasteExpansion 0.002
+			Layer $tlayer
+			MaxSizeX 0.25
+			MaxSizeY 0.25
+			UseCustom $$YES
+			Tolerance 0.0005
+			ReplaceRotated $$NO
+			Window $$NO
+			GO
+		END
+		MOVE
+			By $$WINDOWMODE
+			Boundary $$YES
+			FLASHES $$YES
+			Layer $tlayer # Move from all visible layers
+			TOLAYER $layer
+			Dcode 0 # Move all D-codes
+			Tool 0 # Move all tools
+			Polarity 0
+			GO $lx,$ly,$ux,$uy, 0, 0, 0, 0
+		END
+		ERASE
+			Layer $slayer # Move from all visible layers
+			Dcode 0 # Move all D-codes
+			Tool 0 # Move all tools
+			Polarity 0
+			GO $lx,$ly,$ux,$uy
+		END
+		CUSTOMSTOINTRINSICS 1
+		CUSTOMSTOINTRINSICS 2
+		CUSTOMSTOINTRINSICS 3
+		CUSTOMSTOINTRINSICS 4
+		CUSTOMSTOINTRINSICS 5
+		#COMPACTAPLIST $$YES
+		#UNDO $$NO
+		GETYESNO "Convert Another?", $Repeat
+		#UNDO $$YES
+	END
+ENDMACRO
+

@@ -1,0 +1,513 @@
+MACRO PrintReports
+	# Macro PrintReports Written by Robbie Devennie on 2024-06-10
+	StrWrite $log, "PrintReports Macro Called %s", $$TIME
+	LogMessage 0, $log
+	SelectViewTab "Main"
+	Set $printerChoice = 0
+	Set $autoPrintCount = 0
+	Set $autoPrintAvailable = $$FALSE
+	Set $autoPrintYesNo = $$NO
+	EnumeratePrinters
+	Set $printerCount = $$STATUS
+	If $printerCount > 0
+		StrArray $printerList($printerCount)
+		EnumeratePrinters $printerList
+		Calc $index = 1
+		Repeat $index <= $printerCount
+			StrCmp $printerList($index), "SizePlot"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "SizePlotBot"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "FilledMylar"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "OutlinedMylar"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "FilledMylarBot"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "OutlinedMylarBot"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "ApertureReport"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "ApertureReportBot"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+			End
+			StrCmp $printerList($index), "CheckPlot"
+			If $$STATUS == 0
+				Calc $autoPrintCount = $autoPrintCount + 1
+				Set $printerChoice = $index
+			End
+			Calc $index = $index + 1
+		End
+	End
+	If $autoPrintCount == 9
+		Set $autoPrintAvailable = $$TRUE
+	End
+	StrSet $formTitle, "Print Reports"
+	Set $formId = -1
+	Set $margin = 0.4
+	Set $controlId01 = -1
+	Set $controlId02 = -1
+	Set $controlId03 = -1
+	Set $controlId04 = -1
+	Set $controlId05 = -1
+	Set $controlId06 = -1
+	Set $controlId07 = -1
+	Set $controlId08 = -1
+	Set $controlId09 = -1
+	Set $controlId10 = -1
+	Set $controlId11 = -1
+	Set $controlId12 = -1
+	Set $controlId13 = -1
+	Set $controlId14 = -1
+	Set $controlId15 = -1
+	Set $controlId16 = -1
+	Set $controlId17 = -1
+	Set $controlId18 = -1
+	Set $controlId19 = -1
+	Set $controlId20 = -1
+	Set $controlId21 = -1
+	Set $controlId22 = -1
+	Set $controlId23 = -1
+	Set $controlId24 = -1
+	Set $colorChoice = 1
+	Set $Exit = $$FALSE
+	StrArray $color(2)
+		StrSet $color(1), "Black and White"
+		StrSet $color(2), "Color"
+
+	StrSet $staticText1, "Printer Choice"
+	StrSet $CopyPathText,		"Copy Folder Path to Clipboard"
+	StrSet $copyStatusText,		"Copy"
+	StrSet $staticText3,		"Color Choice"
+	StrSet $CheckPlotText,		"Print PDF CheckPlot"
+	StrSet $SizePlotText,		"Print Size Plot"
+	StrSet $FilledMylarText,	"Print Filled Mylar Overlay"
+	StrSet $OutlinedText,		"Print Outlined Overlay"
+	StrSet $ApertureReportText,	"Print Aperture Report"
+	# Loop through print window until user exits
+	Repeat $Exit == $$FALSE
+		CALLMACRO AllOff
+		Layern $gCheckPlotT
+			Visibility 1
+		End
+		Set $CheckPlot 			= $$FALSE
+		Set $copyPathBtn 		= $$FALSE
+		Set $SizePlotTop 		= $$FALSE
+		Set $SizePlotBtm 		= $$FALSE
+		Set $FilledMylarTop 	= $$FALSE
+		Set $FilledMylarBtm 	= $$FALSE
+		Set $OutlinedTop 		= $$FALSE
+		Set $OutlinedBtm 		= $$FALSE
+		Set $ApertureReport 	= $$FALSE
+		Set $ApertureReportTop 	= $$FALSE
+		Set $ApertureReportBtm 	= $$FALSE
+		DefineForm
+			FormId $formId
+			Title $formTitle
+			Margin $margin
+			StaticText $controlId01, 0.00, 0.00, 2.00, 0.50, $staticText1 , $$FALSE
+			StaticText $controlId02, 0.00, 0.60, 3.00, 0.50, $CopyPathText , $$FALSE
+			StaticText $controlId03, 0.00, 1.20, 2.00, 0.50, $staticText3 , $$FALSE
+			StaticText $controlId04, 0.00, 1.80, 2.00, 0.50, $CheckPlotText , $$FALSE
+			StaticText $controlId05, 0.00, 2.40, 2.00, 0.50, $SizePlotText , $$FALSE
+			StaticText $controlId06, 0.00, 3.00, 2.00, 0.50, $FilledMylarText , $$FALSE
+			StaticText $controlId07, 0.00, 3.60, 2.00, 0.50, $OutlinedText , $$FALSE
+			StaticText $controlId08, 0.00, 4.20, 2.00, 0.50, $ApertureReportText, $$FALSE
+			#
+			DropListControl $controlId09, 2.00, 0.00, 3.00, 0.50, $printerList, $printerChoice
+			ButtonControl $controlId10, 3.00, 0.40, 2.00, 0.50, $copyStatusText, $copyPathBtn
+			RadioButtonControls $controlId11, 2.00, 1.00, 3.00, 0.50, 2, $color, $colorChoice, $$FALSE, $$TRUE
+			ButtonControl $controlId12, 2.00, 1.60, 3.00, 0.50, "PDF CheckPlot", $CheckPlot
+			# If top and bottom are separate make separate buttons
+			IsEmptyLayer $gSizePlotB
+			If $$STATUS == $$FALSE
+				ButtonControl $controlId12, 2.00, 2.20, 1.45, 0.50, "Size Plot Top" , 		$SizePlotTop
+				ButtonControl $controlId13, 3.55, 2.20, 1.45, 0.50, "Size Plot Btm" , 		$SizePlotBtm
+				ButtonControl $controlId14, 2.00, 2.80, 1.45, 0.50, "Filled Overlay Top" , 	$FilledMylarTop
+				ButtonControl $controlId15, 3.55, 2.80, 1.45, 0.50, "Filled Overlay Btm" , 	$FilledMylarBtm
+				ButtonControl $controlId16, 2.00, 3.40, 1.45, 0.50, "Outlined Overlay Top", $OutlinedTop
+				ButtonControl $controlId17, 3.55, 3.40, 1.45, 0.50, "Outlined Overlay Btm", $OutlinedBtm
+				ButtonControl $controlId18, 2.00, 4.00, 1.45, 0.50, "Aperture Report Top" , $ApertureReportTop
+				ButtonControl $controlId19, 3.55, 4.00, 1.45, 0.50, "Aperture Report Btm" , $ApertureReportBtm
+			Else # If stencil is combo use wide buttons
+				ButtonControl $controlId20, 2.00, 2.20, 3.00, 0.50, "Size Plot" , 			$SizePlotTop
+				ButtonControl $controlId21, 2.00, 2.80, 3.00, 0.50, "Filled Overlay" , 		$FilledMylarTop
+				ButtonControl $controlId22, 2.00, 3.40, 3.00, 0.50, "Outlined Overlay" , 	$OutlinedTop
+				ButtonControl $controlId23, 2.00, 4.00, 3.00, 0.50, "Aperture Report" , 	$ApertureReport
+			End
+			ButtonControl $controlId24, 0.50, 4.60, 4.00, 0.50, "Exit", $Exit
+		End
+		If $autoPrintAvailable == $$TRUE
+			GetYesNo "Auto Print available, would you like to use it?", $autoPrintYesNo
+			If $autoPrintYesNo == $$YES
+				CALLMACRO _CADmaticPrintReports
+				Set $Exit = $$TRUE
+			Else
+				Set $autoPrintAvailable = $$FALSE
+				OpenForm $formId
+			End
+		Else
+			OpenForm $formId
+		End
+		If $colorChoice == 1
+			Set $printInColor = $$NO
+		Else
+			Set $printInColor = $$YES
+		End
+		StrSet $printer, $printerList($printerChoice)
+		StrSet $gPrinterChoice, $printer
+		If $CheckPlot
+			CALLMACRO _PrintCheckPlot, $printInColor
+			StrSet $CheckPlotText, "PDF CheckPlot (Complete)"
+		End
+		If $SizePlotTop
+			CALLMACRO _PrintSizePlot, $gSizePlotT
+			StrSet $SizePlotText, "Size Plot Top (Complete)"
+		End
+		If $SizePlotBtm
+			CALLMACRO _PrintSizePlot, $gSizePlotB
+		End
+		If $FilledMylarTop
+			CALLMACRO _PrintFilledMylar, $gModPasteT
+			StrSet $FilledMylarText, "Filled Mylar Overlay (Complete)"
+		End
+		If $FilledMylarBtm
+			CALLMACRO _PrintFilledMylar, $gModPasteB
+		End
+		If $OutlinedTop
+			CALLMACRO _PrintOutlinedMylar, $gModPasteT
+			StrSet $OutlinedText, "Outlined Overlay (Complete)"
+		End
+		If $OutlinedBtm
+			CALLMACRO _PrintOutlinedMylar, $gModPasteB
+		End
+		If $ApertureReportTop
+			CALLMACRO _PrintPasteReport, $printInColor, 1 # Top
+		End
+		If $ApertureReportBtm
+			CALLMACRO _PrintPasteReport, $printInColor, 2 # Bottom
+		End
+		If $ApertureReport
+			CALLMACRO _PrintPasteReport, $printInColor, 3 # All
+			StrSet $ApertureReportText, "Aperture Report (Complete)"
+		End
+		If $copyPathBtn
+			# Copy the default save path to the clipboard
+			SplitPath $$DSNNAME, $dir, $filename, $ext
+			CALLMACRO _CopyStringToClipboard, $dir
+			StrSet $copyStatusText, "Copied"
+			StrSet $CopyPathText, $dir
+		End
+	End
+	ActiveLayer $gCheckPlotT
+ENDMACRO
+
+MACRO _PrintCheckPlot
+	StrWrite $log, "PrintCheckPlot Macro Called %s", $$TIME
+	LogMessage 0, $log
+	ActiveLayer $gCheckPlotT
+	CALLMACRO AllOff
+	IsEmptyLayer $gCheckPlotT
+	If $$STATUS == $$FALSE
+		Layern $gCheckPlotT
+			Visibility 1
+		End
+	End
+	IsEmptyLayer $gCheckPlotB
+	If $$STATUS == $$FALSE
+		Layern $gCheckPlotB
+			Visibility 1
+		End
+	End
+	Print
+		Scale       1
+		PrinterName $gPrinterChoice
+		Overlap     $$NO
+		WindowMode  $$NO
+		Border      $$NO
+		FitToPage   $$YES
+		Border      $$NO
+		Center      $$YES
+		Overlay     $$NO
+		Sketch      $$NO
+		Background  $$NO
+		Screen      $$NO
+		Batch       $$YES
+		Color       $1
+		Go
+	End
+	Layern $gCheckPlotB
+		Visibility 0
+	End
+ENDMACRO
+
+MACRO _PrintFilledMylar
+	StrWrite $log, "_PrintFilledMylar Macro Called %s", $$TIME
+	LogMessage 0, $log
+	CALLMACRO AllOff
+	Layern $1
+		Visibility 1
+	End
+	If $gCADmatic
+		# not needed for CADmatic users
+	Else
+		ViewAll
+	End
+	GetExtents $1, $lx,$ly, $ux,$uy, $$TRUE
+	Calc $width = $ux - $lx
+	Calc $height = $uy - $ly
+	If $height > $width
+		Set $orientation = 1 # 1 = portrait
+		Set $paperWidth = $width
+		Set $paperHeight = $height
+	Else
+		Set $orientation = 2 # 2 = landscape
+		Set $paperWidth = $height
+		Set $paperHeight = $width
+	End
+	If $paperWidth < 8.5
+		If $paperHeight < 11
+			Set $paperSize = 1 # Letter
+		Else
+			Set $paperSize = 8 # A3
+		End
+	Else
+		Set $paperSize = 8 # A3
+	End
+
+	Print
+		Scale 		1
+		PrinterName $gPrinterChoice
+		Overlap 	$$NO
+		Border 		$$YES
+		BorderText 	"Filled Mylar Overlay $DESIGN, $DATE"
+		FitToPage 	$$NO
+		Center 		$$YES
+		Orientation $orientation
+		PaperSize 	$paperSize
+		Overlay 	$$NO
+		Sketch 		$$NO
+		Background 	$$NO
+		Screen 		$$NO
+		Batch 		$$NO
+		Color 		$$NO
+		Go
+	End
+ENDMACRO
+
+MACRO _PrintOutlinedMylar
+	StrWrite $log, "_PrintOutlinedMylar Macro Called %s", $$TIME
+	LogMessage 0, $log
+	CALLMACRO AllOff
+	Layern $1
+		Visibility 1
+	End
+	If $gCADmatic
+		# not needed for CADmatic users
+	Else
+		ViewAll
+	End
+	GetExtents $1, $lx,$ly, $ux,$uy, $$TRUE
+	Calc $width = $ux - $lx
+	Calc $height = $uy - $ly
+	If $height > $width
+		Set $orientation = 1 # 1 = portrait
+		Set $paperWidth = $width
+		Set $paperHeight = $height
+	Else
+		Set $orientation = 2 # 2 = landscape
+		Set $paperWidth = $height
+		Set $paperHeight = $width
+	End
+	If $paperWidth < 8.5
+		If $paperHeight < 11
+			Set $paperSize = 1 # Letter
+		Else
+			Set $paperSize = 8 # A3
+		End
+	Else
+		Set $paperSize = 8 # A3
+	End
+	Print
+		Scale        1
+		PrinterName  $gPrinterChoice
+		Overlap      $$NO
+		# WindowMode $$YES
+		Border       $$YES
+		BorderText   "Outlined Mylar Overlay $DESIGN, $DATE"
+		FitToPage    $$NO
+		Center       $$YES
+		Orientation  $orientation
+		PaperSize    $paperSize
+		Overlay      $$NO
+		Sketch       $$YES
+		Background   $$NO
+		Screen       $$NO
+		Batch        $$NO
+		Color        $$NO
+		Go
+	End
+ENDMACRO
+
+MACRO _PrintPasteReport
+	# Macro ExportPasteReport Written by Robbie Devennie on 2024-02-28
+	StrWrite $log, "_PrintPasteReport Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# Undo $$NO
+	Set $printInColor = $1
+	Set $printBackground = $$NO
+	StrSet $optionalText, "*Unless otherwise requested, the minimum area ratio is 0.6 per IPC 7525c stencils with no coating. Nanoslic Coated stencils will be checked to 0.5"
+	StrSet $font, "Arial"
+	#* Export Paste Report
+	# Convert mils to inches for paste report
+	Calc $thickInT = $gThickT /1000
+	Calc $thickInB = $gThickB /1000
+	CALLMACRO _SetgPasteLayersM # Find num of modified paste layers
+	If $gPasteLayers == 3
+		CALLMACRO _CheckCombo, $gComboYesNo # Check If design is a combo stencil
+	End
+	If $gPasteLayers == 0
+		LogMessage 0, "You must re-run Checkplot prior to File export."
+		Stop "You must re-run Checkplot prior to File export."
+	End
+	# Print Paste Report
+	If $2 == 1
+		# Top
+		LogMessage 0, "Printing Top Paste Report"
+		PrintPasteLayerReport
+			PrinterName      $gPrinterChoice # Name of desired printer
+			Orientation      2 #                                                       1 == portrait,                         2 == landscape
+			Layer            $gCutT
+			Thickness        $thickInT # thickness of paste, default is last specified
+			AreaRatio        $gAR # area ratio limit, default is last specified
+			AspectRatio      1.5 # aspect ratio limit, default is last specified
+			Ignore2PinParts  $$YES # pitch Check - ignore 2 pin parts, default is last specified
+			ColumnOrder      1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14 # order of columns in report, default is all columns in defined order, to not Print a column omit it from the column order list for example to print only the 1st, 3rd, 7th, and 10th columns specify: 'ColumnOrder 1, 3, 7, 10'
+			LayerBlockFirst  $$NO # Print Layer block first, default is Table first
+			PrintTitle       $gJobNumT # report Title
+			PrintLine1Lbl    "Part Number:" # line 1 label
+			PrintLine1Txt    $gPartNumT # line 1 Text
+			PrintLine2Lbl    "Customer:" # line 2 label
+			PrintLine2Txt    $gCustomer # line 2 Text
+			PrintLayer       $gModPasteT # Layer to print, If not specified no layers
+			PrintLayer       $gCheckPlotT
+			OptionalTextLeft $optionalText
+			PrintInColor     $printInColor # Print Layer in Color Or black & white
+			PrintBackGround  $printBackground # Print Layer Background
+			AddBorderLayer   $$NO # add Border Layer data to printed layer
+			FontName         $font # Name of Font to use
+			FontPoints       8 # Size of Font to use in points
+			Go
+		End
+	End
+	If $2 == 2
+		# Bottom
+		LogMessage 0, "Printing Bottom Paste Report"
+		PrintPasteLayerReport
+			PrinterName      $gPrinterChoice # Name of desired printer
+			Orientation      2 # 1 == portrait, 2 == landscape
+			Layer            $gCutB
+			Thickness        $thickInB # thickness of paste, default is last specified
+			AreaRatio        $gAR # area ratio limit, default is last specified
+			AspectRatio      1.5 # aspect ratio limit, default is last specified
+			Ignore2PinParts  $$YES # pitch Check - ignore 2 pin parts, default is last specified
+			ColumnOrder      1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14 # order of columns in report, default is all columns in defined order, to not Print a column omit it from the column order list for example to print only the 1st, 3rd, 7th, and 10th columns specify: 'ColumnOrder 1, 3, 7, 10'
+			LayerBlockFirst  $$NO # Print Layer block first, default is Table first
+			PrintTitle       $gJobNumB # report Title
+			PrintLine1Lbl    "Part Number:" # line 1 label
+			PrintLine1Txt    $gPartNumB # line 1 Text
+			PrintLine2Lbl    "Customer:" # line 2 label
+			PrintLine2Txt    $gCustomer # line 2 Text
+			PrintLayer       $gModPasteB
+			PrintLayer       $gCheckPlotB
+			OptionalTextLeft $optionalText
+			PrintInColor     $printInColor # Print Layer in Color Or black & white
+			PrintBackGround  $printBackground # Print Layer Background
+			AddBorderLayer   $$NO # add Border Layer data to printed layer
+			FontName         $font # Name of Font to use
+			FontPoints       8 # Size of Font to use in points
+			Go
+		End
+	End
+	If $2 == 3
+		# Combo
+		LogMessage 0, "Printing Combo Paste Report"
+		PrintPasteLayerReport
+			PrinterName      $gPrinterChoice	# Name of desired printer
+			Orientation      2					# 1 == portrait, 2 == landscape
+			Layer            $gCutT
+			Thickness        $thickInT			# thickness of paste, default is last specified
+			AreaRatio        $gAR				# area ratio limit, default is last specified
+			AspectRatio      1.5				# aspect ratio limit, default is last specified
+			Ignore2PinParts  $$YES				# pitch Check - ignore 2 pin parts, default is last specified
+			ColumnOrder      1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 					# order of columns in report, default is all columns in defined order, to not Print a column omit it from the column order list for example to print only the 1st, 3rd, 7th, and 10th columns specify: 'ColumnOrder 1, 3, 7, 10'
+			LayerBlockFirst  $$NO				# Print Layer block first, default is Table first
+			PrintTitle       $gJobNumT			# report Title
+			PrintLine1Lbl    "Part Number:"		# line 1 label
+			PrintLine1Txt    $gPartNumT			# line 1 Text
+			PrintLine2Lbl    "Customer:"		# line 2 label
+			PrintLine2Txt    $gCustomer			# line 2 Text
+			PrintLayer       $gModPasteT		# Layer to print, If not specified no layers
+			PrintLayer       $gModPasteB
+			PrintLayer       $gCheckPlotT
+			OptionalTextLeft $optionalText
+			PrintInColor     $printInColor		# Print Layer in Color Or black & white
+			PrintBackGround  $printBackground	# Print Layer Background
+			AddBorderLayer   $$NO				# add Border Layer data to printed layer
+			FontName         $font				# Name of Font to use
+			FontPoints       8					# Size of Font to use in points
+			Go
+		End
+	End
+ENDMACRO
+
+MACRO _PrintSizePlot
+	StrWrite $log, "PrintSizePlot Macro Called %s", $$TIME
+	LogMessage 0, $log
+	# $1 = $layer
+	CALLMACRO AllOff
+	IsEmptyLayer $1
+	# StrWrite $borderText, "$DESIGN $LAYERNAME $DATE"
+	If $$STATUS == $$FALSE
+		Layern $1
+			Visibility 1
+		End
+		GetExtents $1, $lx,$ly, $ux,$uy, $$TRUE
+		Calc $lx = $lx - 0.5
+		Calc $ly = $ly - 0.5
+		Calc $ux = $ux + 0.5
+		Calc $uy = $uy + 0.5
+		Print
+			Scale       1
+			PrinterName $gPrinterChoice
+			Overlap     $$NO
+			WindowMode  $$YES
+			Border      $$YES
+			BorderText  "$DESIGN $LAYERNAME $DATE"
+			FitToPage   $$YES
+			Center      $$YES
+			Overlay     $$NO
+			Sketch      $$NO
+			Background  $$NO
+			Screen      $$YES
+			Batch       $$YES
+			Color       $$NO
+			Go          $lx,$ly, $ux,$uy
+		End
+	End
+ENDMACRO

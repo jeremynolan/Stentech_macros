@@ -1,0 +1,1009 @@
+MACRO StentechExportFiles
+	StrWrite $log, "StentechExportFiles Macro Called %s", $$TIME
+	LogMessage 	0, $log
+	# Purge
+	# Hide all layers to show only those exporting
+	CALLMACRO AllOff
+	ActiveLayer $gCheckPlotT
+	Layern $gCheckPlotT
+		Visibility 1
+	End
+	If $gCADmatic
+		# CADmatic does not need to view all and redraw
+	Else
+		ViewAll
+		Redraw
+	End
+	StrWrite $designerInfo, " Designed by: %s, Date: %s", $gOp, $gDateISO
+	Layern $gCheckPlotT
+		Comments $designerInfo
+	End
+	Layern $gCheckPlotB
+		Comments $designerInfo
+	End
+	Layern $gCutT
+		Comments $designerInfo
+	End
+	Layern $gCutB
+		Comments $designerInfo
+	End
+	Layern $gEngraveT
+		Comments $designerInfo
+	End
+	Layern $gEngraveB
+		Comments $designerInfo
+	End
+	Layern $gFidT
+		Comments $designerInfo
+	End
+	Layern $gFidB
+		Comments $designerInfo
+	End
+	Layern $gTxtT
+		Comments $designerInfo
+	End
+	Layern $gTxtB
+		Comments $designerInfo
+	End
+	Layern $gNSGLayerT
+		Comments $designerInfo
+	End
+	Layern $gNSGLayerB
+		Comments $designerInfo
+	End
+	# Save alignment layers from being overwritten.
+	Layern $gAlignT
+		LyrName		"Alignment Layer Top.12"
+		Comments 	$designerInfo
+	End
+	Layern $gAlignB
+		LyrName		"Alignment Layer Bottom.12"
+		Comments 	$designerInfo
+	End
+	CALLMACRO _SetgPasteLayersM
+	If $gPasteLayers == 2
+		IsEmptyLayer $gSizePlotB
+		If $$STATUS == $$TRUE
+			CALLMACRO _MakeSizePlot
+			CALLMACRO _MakeLMD
+		End
+	Else
+		IsEmptyLayer $gSizePlotT
+		If $$STATUS == $$TRUE
+			CALLMACRO _MakeSizePlot
+			CALLMACRO _MakeLMD
+		End
+	End
+	CALLMACRO ExportApReport
+	If $gCADmatic
+		Set $exportAll = $$YES
+	Else
+		GetYesNo "Export all files automatically?\r\rChoose No to select each type manually.", $exportAll
+	End
+	If $exportAll == $$YES
+		CALLMACRO ExportCheckPlotFiles
+		CALLMACRO ExportLPKFFiles, $$YES, $$NO, $$NO
+		CALLMACRO ExportTannlinFiles
+		CALLMACRO ExportNSGFiles
+		If $gCADmatic
+			CALLMACRO _CADmaticPrintReports
+			SelectViewTab "Log"
+		Else
+			CALLMACRO PrintReports
+		End
+	Else
+		Set $exitForm = $$FALSE
+		StrSet $CheckplotStatus, "Ready"
+		StrSet $LPKFStatus, 	 "Ready"
+		StrSet $TannlinStatus, 	 "Ready"
+		StrSet $NSGStatus, 		 "Ready"
+		StrSet $PrintStatus, 	 "Ready"
+		StrSet $EformStatus, 	 "Ready"
+		Repeat $exitForm == $$FALSE
+			Set $formId = -1
+			Set $margin = 0.4
+			Set $controlId01 = -1
+			Set $controlId02 = -1
+			Set $controlId03 = -1
+			Set $controlId04 = -1
+			Set $controlId05 = -1
+			Set $controlId06 = -1
+			Set $controlId07 = -1
+			Set $controlId08 = -1
+			Set $controlId09 = -1
+			Set $controlId10 = -1
+			Set $controlId11 = -1
+			Set $controlId12 = -1
+			Set $controlId13 = -1
+			Set $controlId14 = -1
+			Set $controlId15 = -1
+			Set $checkPlotClicked 	= $$FALSE
+			Set $LPKFClicked 		= $$FALSE
+			Set $TannlinClicked 	= $$FALSE
+			Set $NSGClicked 		= $$FALSE
+			Set $EformClicked 		= $$FALSE
+			Set $runPrintMacro 		= $$FALSE
+			Set $exitForm 			= $$FALSE
+			#*####################
+			# import facility list
+			# Read list of Facility names for number in list
+			# StrWrite $facilityList, "M:\\VisualCAM\\Automation\\ExportFormats\\all_facilities.list"
+			# Set $lines = 0
+			# StrSet $readToken, "%s"
+			# CALLMACRO _GetListLength, $facilityList, $lines, $readToken # $1 = $filename, $2 = $lines, $3 = $readToken
+			# StrArray $facilityNames($lines)
+			# Set $line = 1
+			# FileOpen $fid, $facilityList, "r"
+			# If $$STATUS != 0
+			# 	Repeat $line < $lines  # Avoid bogus last line with <
+			# 		FileRead $fid, $readToken, $facilityNames($line)
+			# 		Calc $line = $line + 1
+			# 	End
+			# 	FileClose $fid
+			# Else
+			# 	StrWrite $log, "Failed to read facility list at\r\r%s\r\rPlease check that Datto is running properly and loaded on the M: drive. (ID:008)", $facilityList
+			# 	LogMessage 3, $log
+			# 	Stop $log
+			# End
+			# FileClose $fid
+			#*####################
+			Set $facilityChoice = 1
+			StrWrite $formTitle, "File Export"
+			DefineForm
+				FormId $formId
+				Title  $formTitle
+				Margin $margin
+				# DropListControl $controlId01, 1.50, 0.00, 2.00, 0.50, $facilityNames,		$facilityChoice
+				ButtonControl	$controlId02, 1.50, 0.60, 2.00, 0.50, "Export Check Plots", $checkPlotClicked
+				ButtonControl	$controlId03, 1.50, 1.20, 2.00, 0.50, "Export LPKF", 		$LPKFClicked
+				ButtonControl	$controlId04, 1.50, 1.80, 2.00, 0.50, "Export Tannlin", 	$TannlinClicked
+				ButtonControl	$controlId05, 1.50, 2.40, 2.00, 0.50, "Export NSG files", 	$NSGClicked
+				ButtonControl	$controlId06, 1.50, 3.00, 2.00, 0.50, "Print Reports", 		$runPrintMacro
+				ButtonControl	$controlId07, 1.50, 3.60, 2.00, 0.50, "Export Eform", 		$EformClicked
+				ButtonControl	$controlId08, 0.75, 4.20, 2.00, 0.50, "Exit", 				$exitForm
+				# StaticText 		$controlId09, 0.00, 0.10, 1.30, 0.50, "Select Facility", 	$$FALSE
+				StaticText 		$controlId10, 0.00, 0.70, 1.30, 0.50, $CheckplotStatus, 	$$FALSE
+				StaticText 		$controlId11, 0.00, 1.30, 1.30, 0.50, $LPKFStatus, 			$$FALSE
+				StaticText 		$controlId12, 0.00, 1.90, 1.30, 0.50, $TannlinStatus, 		$$FALSE
+				StaticText 		$controlId13, 0.00, 2.50, 1.30, 0.50, $NSGStatus, 			$$FALSE
+				StaticText 		$controlId14, 0.00, 3.10, 1.30, 0.50, $PrintStatus, 		$$FALSE
+				StaticText 		$controlId15, 0.00, 3.70, 1.30, 0.50, $EformStatus, 		$$FALSE
+			End
+			OpenForm $formId
+			#*####################
+			# Read export type
+			# StrWrite $exportOptions, "M:\\VisualCAM\\Automation\\ExportFormats\\%s.exports", $facilityNames($facilityChoice)
+			# FileOpen $fid, $exportOptions, "r"
+			# If $$STATUS != 0
+			# 	FileRead $fid, "%s", $exportType
+			# 	FileClose $fid
+			# 	StrWrite $log, "Export type: %s", $exportType
+			# 	LogMessage 0, $log
+			# 	StrWrite $gExportType, $exportType
+			# Else
+			# 	StrWrite $log, "Failed to read export type at\r\r%s\r\rPlease check that Datto is running properly and loaded on the M: drive. (ID:009)", $facilityList
+			# 	LogMessage 3, $log
+			# 	MessageBox "Failed to read export type at\r\r%s\r\rPlease check that Datto is running properly and loaded on the M: drive. (ID:009)", $facilityList
+			# 	GetYesNo "Export squeegee view? - Yes = Squeegee, No = Contact", $exportSqueegeeView
+			# 	If $exportSqueegeeView == $$YES
+			# 		StrWrite $gExportType, "Squeegee"
+			# 	Else
+			# 		StrWrite $gExportType, "Contact"
+			# 	End
+			# End
+			# StrWrite $log, "Facility: %s, Total facilities: %.0n, Export option: %s", $facilityNames($facilityChoice), $lines, $gExportType
+			# LogMessage 0, $log
+			#*####################
+			If $checkPlotClicked ==  $$TRUE
+				CALLMACRO ExportCheckPlotFiles
+				StrSet $CheckplotStatus, "Finished"
+			End
+			If $LPKFClicked ==  $$TRUE
+				CALLMACRO ExportLPKFFiles, $$YES, $$NO, $$NO
+				StrSet $LPKFStatus, "Finished"
+			End
+			If $TannlinClicked ==  $$TRUE
+				CALLMACRO ExportTannlinFiles
+				StrSet $TannlinStatus, "Finished"
+			End
+			If $NSGClicked ==  $$TRUE
+				CALLMACRO ExportNSGFiles
+				StrSet $NSGStatus, "Finished"
+			End
+			If $runPrintMacro == $$YES
+				CALLMACRO PrintReports
+				StrSet $PrintStatus, "Finished"
+			End
+			If $EformClicked == $$YES
+				CALLMACRO ExportEformFiles
+				StrSet $EformStatus, "Finished"
+			End
+		End
+	End
+	CALLMACRO AllOff
+	ActiveLayer $gCheckPlotT
+	Layern $gCheckPlotT
+		Visibility  1
+	End
+	If $gCADmatic
+		CALLMACRO _CopyCustomerData
+		StrSet $CADGroup, "Stentech" # todo: set this based on job info
+		CALLMACRO _SendToDatto, $CADGroup
+	Else
+		ViewAll
+		Redraw
+		MessageBox "File Export Finished", "File Export Macro Complete\r\rOpen output folder?", 2, 1
+		If $$STATUS == $$YES
+			CALLMACRO FolderReview
+		End
+	End
+	StrWrite $log, "Stentech File Export Macro Complete %s", $$TIME
+	LogMessage 0, $log
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+	SaveAs $$DSNNAME
+ENDMACRO
+
+MACRO StentechLayerPick
+	StrWrite 	$log, "StentechLayerPick Macro Called %s", $$TIME
+	LogMessage 	0, $log
+	# * This macro allows you to look through each layer, one layer at a time and set the layer type
+	# * as well as optionally delete unnecessary files and finally sets the color for all layers.
+	# * This macro is intended to be used directly after importing Gerber files.
+	CompactLayerTable
+	ShowUnusedLayers $$NO
+	Set $show = $$STATUS
+	StrArray $lType(13)
+		StrWrite $lType(1),  "Original Top Paste"
+		StrWrite $lType(2),  "Top Silk"
+		StrWrite $lType(3),  "Top Copper"
+		StrWrite $lType(4),  "Top Soldermask"
+		StrWrite $lType(5),  "Original Bottom Paste"
+		StrWrite $lType(6),  "Bottom Silk"
+		StrWrite $lType(7),  "Bottom Copper"
+		StrWrite $lType(8),  "Bottom Soldermask"
+		StrWrite $lType(9),  "Border"
+		StrWrite $lType(10), "Drill Drawing"
+		StrWrite $lType(11), "Fid Top"
+		StrWrite $lType(12), "Fid Bottom"
+		StrWrite $lType(13), "Delete Layer"
+
+	Array $pick(13)
+		Set $pick(1)  = $$LTTOP
+		Set $pick(2)  = $$LTSILKTOP
+		Set $pick(3)  = $$LTOTHER
+		Set $pick(4)  = $$LTMASKTOP
+		Set $pick(5)  = $$LTBOTTOM
+		Set $pick(6)  = $$LTSILKBOT
+		Set $pick(7)  = $$LTOTHER
+		Set $pick(8)  = $$LTMASKBOT
+		Set $pick(9)  = $$LTBORDER
+		Set $pick(10) = $$LTOTHER
+		Set $pick(11) = $$LTOTHER
+		Set $pick(12) = $$LTOTHER
+
+	Set $layer = 1
+	Array $order($$MAXLAYERS)
+	Repeat $layer <= $$MAXLAYERS # turn off all layers
+		IsEmptyLayer $layer
+		If $$STATUS == $$NO
+			GetLayer $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$pol,$key,$ft,$lx,$ly,$ux,$uy,$netid
+			Layern $layer
+				Visibility	0
+			End
+		End
+		Set $order($layer) = $layer
+		Calc $layer = $layer + 1
+	End
+	Set $layer = 1
+	Set $junk = 43
+	Repeat $layer <= $$MAXLAYERS
+		IsEmptyLayer $layer
+		If $$STATUS == $$NO
+			GetLayer $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$pol,$key,$ft,$lx,$ly,$ux,$uy,$netid
+			If $type == $$LTNC
+				Set $temp = $order($gNCDrill)
+				# Find the current location of this layer in the order array
+				# and save the current value into that slot
+				Set $Idx = 1
+				Repeat $Idx <= $$MAXLAYERS
+					If $order($Idx) == $layer
+						Set $order($Idx) = $temp
+					End
+					Calc $Idx = $Idx + 1
+				End
+				# Update the order array with the new layer
+				Set $order($gNCDrill) = $layer
+			Else
+				Layern $layer
+					Visibility	1
+				End
+				# GetExtents 0, $lx,$ly, $ux,$uy
+				If $gCADmatic
+					# not needed for CADmatic users
+				Else
+					ViewAll
+				End
+				Set $toLayer = 1
+				CALLMACRO _AutoLayerPick, $toLayer, $ln # numvar, strvar
+				# Prompt for Layer Type or Delete
+				StrWrite $choiceHeader, "Choose Layer type for %s", $ln
+				Set $radioChoice = $toLayer
+				StrSet $choice, ""
+				Set $formId       = -1
+				Set $Radio1       = -1
+				Set $Static1      = -1
+				Set $OKBtn        = -1
+				Set $CancelBtn    = -1
+				Set $OKBtnClicked = $$FALSE
+				Set $CancelBtnClicked = $$FALSE
+				DefineForm
+					FormId              $formId
+					Title               "Layer Choice"
+					Margin              0.4
+					StaticText          $Static1,   0.50, 0.30, 3.00,  0.50, $choiceHeader, $$FALSE
+					ButtonControl	  	$OKBtn,  	0.50, 0.70, 1.40,  0.50, "Next",   $OKBtnClicked
+					ButtonControl	  	$CancelBtn, 2.00, 0.70, 1.40,  0.50, "Cancel", $CancelBtnClicked
+					RadioButtonControls	$Radio1,    0.50, 1.40, 3.00,  13, 13, $lType, $radioChoice, $$FALSE, $$FALSE
+				End
+				If $gCADmatic
+					# CADmatic users don't need to see this form
+				Else
+					OpenForm $formId
+					If $OKBtnClicked == $$FALSE
+						StrWrite $log, "Macro Cancelled. (ID:011)"
+						LogMessage 3, $log
+						Stop $log
+					End
+				End
+				StrSet $choice, $lType($radioChoice) # Set the choice
+				StrWrite $log, "Layer: %s assigned to: %s", $ln, $lType($radioChoice) # Log the assignment
+				LogMessage 0, $log
+				If $radioChoice == 13 # Delete Layer chosen
+					DeleteLayer $layer # Delete the Layer
+					StrWrite $log, "Layer: %s deleted", $ln # Log the deletion
+					LogMessage 0, $log
+				End
+				Set $cnt = 1
+				Repeat $cnt < 14
+					StrCmp $choice, $lType($cnt)
+					If $$STATUS == 0 # They are equal
+						If $cnt == 13
+							Set $temp = $order($junk)
+							# Find the current location of this layer in the order array
+							# and save the current value into that slot
+							Set $Idx = 1
+							Repeat $Idx <= $$MAXLAYERS
+								If $order($Idx) == $layer
+									Set $order($Idx) = $temp
+								End
+								Calc $Idx = $Idx + 1
+							End
+							# Update the order array with the new layer
+							Set $order($junk) = $layer
+							Calc $junk = $junk + 1
+						Else
+							Layern $layer
+								Type $pick($cnt)
+								NetId		0
+								Visibility	0
+							End
+							If $cnt == 1
+								Set $temp = $order($gOrigPasteT)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gOrigPasteT) = $layer
+							End
+							If $cnt == 2
+								Set $temp = $order($gSilkT)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gSilkT) = $layer
+							End
+							If $cnt == 3
+								Set $temp = $order($gCopperT)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gCopperT) = $layer
+							End
+							If $cnt == 4
+								Set $temp = $order($gSolderMaskT)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gSolderMaskT) = $layer
+							End
+							If $cnt == 5
+								Set $temp = $order($gOrigPasteB)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gOrigPasteB) = $layer
+							End
+							If $cnt == 6
+								Set $temp = $order($gSilkB)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gSilkB) = $layer
+							End
+							If $cnt == 7
+								Set $temp = $order($gCopperB)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gCopperB) = $layer
+							End
+							If $cnt == 8
+								Set $temp = $order($gSolderMaskB)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gSolderMaskB) = $layer
+							End
+							If $cnt == 9
+								Set $temp = $order($gBorderT)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gBorderT) = $layer
+							End
+							If $cnt == 10
+								Set $temp = $order($gDrawing)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gDrawing) = $layer
+							End
+							If $cnt == 11
+								Set $temp = $order($gFidT)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gFidT) = $layer
+							End
+							If $cnt == 12
+								Set $temp = $order($gFidB)
+								# Find the current location of this layer in the order array
+								# and save the current value into that slot
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								# Update the order array with the new layer
+								Set $order($gFidB) = $layer
+							End
+							If $cnt == 13
+								Set $temp = $order($gNCDrill)
+								Set $Idx = 1
+								Repeat $Idx <= $$MAXLAYERS
+									If $order($Idx) == $layer
+										Set $order($Idx) = $temp
+									End
+									Calc $Idx = $Idx + 1
+								End
+								Set $order($gNCDrill) = $layer
+							End
+						End
+					End
+					Calc $cnt = $cnt + 1
+				End
+			End
+			Layern $layer
+				Visibility	0
+			End
+		End
+		Calc $layer = $layer + 1
+	End
+	SetLayerOrder $order
+	CopyLayer $gOrigPasteT, $gUntouchPasteT
+	GetLayer $gOrigPasteT,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	StrWrite $newname, "Untouched %s", $ln
+	Layern $gUntouchPasteT
+		LyrName $newname
+	End
+	CopyLayer $gOrigPasteB, $gUntouchPasteB
+	GetLayer $gOrigPasteB,$fn,$ln,$an,$vis,$fc,$dc,$type,$polarity,$key,$ft,$lx,$ly,$ux,$uy,$netid,$table
+	StrWrite $newname, "Untouched %s", $ln
+	Layern $gUntouchPasteB
+		LyrName $newname
+	End
+	CopyLayer $gBorderT, $gBorderB
+	CopyLayer $gDrawing, $gNCDrill
+	CopyLayer $gNCDrill, $gNCDrillB
+	Set $layer = 1
+	Repeat $layer <= $$MAXLAYERS # turn on all layers
+		IsEmptyLayer $layer
+		If $$STATUS == $$NO
+			GetLayer $layer,$fn,$ln,$an,$vis,$fc,$dc,$type,$pol,$key,$ft,$lx,$ly,$ux,$uy,$netid
+			Layern $layer
+				Visibility	1
+			End
+		End
+		Calc $layer = $layer + 1
+	End
+	ActiveLayer	1
+	ShowUnusedLayers $$YES
+	If $gCADmatic
+		Undo $$NO
+	Else
+		Undo $$YES
+	End
+ENDMACRO
+
+MACRO _AddLogos
+	StrWrite 	$log, "_AddLogos Macro Called %s", $$TIME
+	LogMessage 	0, $log
+
+	If $$CALLDEPTH > 0
+		StrSet $cmtAddFlowLogo, $1
+	Else
+		StrSet $cmtAddFlowLogo, "Yes"
+	End
+	Set $addFlowLogo = $$NO
+	GetDesignProperty "pbLogoOffset",	$pbLogoOffset
+	GetDesignProperty "nsgLogoOffset",	$nsgLogoOffset
+	GetDesignProperty "flowLogoOffset",	$flowLogoOffset
+
+	Set $pbLogoOffsetX	 = 0
+	Set $pbLogoOffsetY	 = 0
+	Set $nsgLogoOffsetX	 = 0
+	Set $nsgLogoOffsetY	 = 0
+	Set $flowLogoOffsetX = 0
+	Set $flowLogoOffsetY = 0
+
+	StrRead $pbLogoOffset, 	 "%n,%n", $pbLogoOffsetX, 	$pbLogoOffsetY
+	StrRead $nsgLogoOffset,  "%n,%n", $nsgLogoOffsetX, 	$nsgLogoOffsetY
+	StrRead $flowLogoOffset, "%n,%n", $flowLogoOffsetX, $flowLogoOffsetY
+
+	If $gPasteLayers == 2
+		ActiveLayer $gCheckPlotB
+		If $gCADmatic
+			StrCmp $cmtAddFlowLogo, "Yes"
+			If $$STATUS == 0
+				Set $addFlowLogo = $$YES
+			End
+		Else
+			GetYesNo "Add Flow Logo?", $addFlowLogo
+		End
+		If $addFlowLogo == $$YES
+			CurrentDcode 9990
+			AddFlash $flowLogoOffsetX, $flowLogoOffsetY
+		End
+		StrCmp $gLeadFree, "Yes"
+		If $$STATUS == 0
+			CurrentDcode 9991
+			AddFlash $pbLogoOffsetX, $pbLogoOffsetY
+		End
+		StrCmp $gCoatT, "NanoSlic"
+		If $$STATUS == 0
+			CurrentDcode 9992
+			AddFlash $nsgLogoOffsetX, $nsgLogoOffsetY
+		End
+		StrCmp $gCoatT, "Nano Wipe"
+		If $$STATUS == 0
+			CurrentDcode 9993
+			AddFlash $nsgLogoOffsetX, $nsgLogoOffsetY
+		End
+
+		StrCmp $gCoatT, "Advanced Nano"
+		If $$STATUS == 0
+			CurrentDcode 9994
+			AddFlash $nsgLogoOffsetX, $nsgLogoOffsetY
+		End
+		StrCmp $gCoatT, "BluPrint"
+		If $$STATUS == 0
+			CurrentDcode 9992
+			AddFlash $nsgLogoOffsetX, $nsgLogoOffsetY
+		End
+	Else
+		ActiveLayer $gCheckPlotT
+		If $gCADmatic
+			StrCmp $cmtAddFlowLogo, "Yes"
+			If $$STATUS == 0
+				Set $addFlowLogo = $$YES
+			End
+		Else
+			GetYesNo "Add Flow Logo?", $addFlowLogo
+		End
+		If $addFlowLogo == $$YES
+			CurrentDcode 9990
+			AddFlash $flowLogoOffsetX, $flowLogoOffsetY
+		End
+		StrCmp $gLeadFree, "Yes"
+		If $$STATUS == 0
+			CurrentDcode 9991
+			AddFlash $pbLogoOffsetX, $pbLogoOffsetY
+		End
+		StrCmp $gCoatT, "NanoSlic"
+		If $$STATUS == 0
+			CurrentDcode 9992
+			AddFlash $nsgLogoOffsetX, $nsgLogoOffsetY
+		End
+		StrCmp $gCoatT, "Microshield"
+		If $$STATUS == 0
+			CurrentDcode 9993
+			AddFlash $nsgLogoOffsetX, $nsgLogoOffsetY
+		End
+		If $gPasteLayers == 3
+			If $gComboYesNo == $$NO
+				GetExtents $gCheckPlotT, $lx,$ly, $ux,$uy, $$YES, $$YES
+				Copy
+					By $$WINDOWMODE
+					Boundary $$YES
+					Flashes  $$YES
+					Polarity 0
+					Layer $gCheckPlotT
+					Dcode "9990:9995"
+					ToLayer $gCheckPlotB
+					Go $lx,$ly, $ux,$uy, 0,0, 0,0
+				End
+			End
+		End
+	End
+	SelectFilter
+		Dcode 0
+		Polarity 0
+	End
+ENDMACRO
+
+MACRO _MakeLMD
+	StrWrite $log, "_MakeLMD Macro Called %s", $$TIME
+	LogMessage 0, $log
+	CALLMACRO _ClearLayer, $gLMDT, 1
+	CALLMACRO _ClearLayer, $gLMDB, 1
+	Layern $gLMDT
+		LyrName    "GBR.lsr Top"
+	End
+	Layern $gLMDB
+		LyrName    "GBR.lsr Bottom"
+	End
+	If $gPasteLayers == 1
+		CopyLayer $gCutT, 		$gLMDT
+		CopyLayer $gEngraveT, 	$gLMDT
+		CopyLayer $gTxtT,  		$gLMDT
+		CopyLayer $gTxtOut20T,  $gLMDT
+		CALLMACRO _RAD_AddEvenBorder, $gLMDT, 0.5
+	End
+	If $gPasteLayers == 2
+		CopyLayer $gCutB, 		$gLMDB
+		CopyLayer $gEngraveB, 	$gLMDB
+		CopyLayer $gTxtB, 		$gLMDB
+		CopyLayer $gTxtOut20B,  $gLMDB
+		CALLMACRO _RAD_AddEvenBorder, $gLMDB, 0.5
+	End
+	If $gPasteLayers == 3
+		CopyLayer $gCutT, 		$gLMDT
+		CopyLayer $gEngraveT, 	$gLMDT
+		CopyLayer $gTxtT,  		$gLMDT
+		CopyLayer $gTxtOut20T,  $gLMDT
+		CALLMACRO _RAD_AddEvenBorder, $gLMDT, 0.5
+		If $gComboYesNo == $$NO
+			CopyLayer $gCutB,	   $gLMDB
+			CopyLayer $gEngraveB,  $gLMDB
+			CopyLayer $gTxtB, 	   $gLMDB
+			CopyLayer $gTxtOut20B, $gLMDB
+			CALLMACRO _RAD_AddEvenBorder, $gLMDB, 0.5
+		End
+	End
+ENDMACRO
+
+MACRO _MirrorLayer
+	# Macro _MirrorLayer Written by Robbie Devennie on 2024-02-16
+	If $$CALLDEPTH ==  0
+		StrWrite $log, "_MirrorLayer Macro Called %s", $$TIME
+		LogMessage 0, $log
+		GetValue "Which layer to mirror?", $value
+		StrRead $value, "%n", $layer
+	Else
+		Set $layer = $1 # set Layer from other macro.
+	End
+	GetLayer $layer, $fn, $ln, $an, $vis, $fc, $dc, $type, $polarity, $key, $ft, $lx,$ly, $ux,$uy, $netid, $table
+	StrWrite $log, "Mirroring Layer %.n %s", $layer, $ln
+	LogMessage 0, $log
+	Mirror
+		Direction    "H"
+		Centered     $$NO
+		By           $$WINDOWMODE
+		Boundary     $$YES
+		Flashes      $$YES
+		Draws        $$YES
+		Arcs         $$YES
+		Polys        $$YES
+		Text         $$YES
+		Drills       $$YES
+		Slots        $$YES
+		DrillCircles $$YES
+		DrillText    $$YES
+		MillPaths    $$YES
+		MillCircles  $$YES
+		Dcode        0
+		Tool         0
+		Layer        $layer
+		Go $lx,$ly, $ux,$uy, 0,0
+	End
+ENDMACRO
+
+MACRO _ToggleCadmatic
+	# Macro _ToggleCadmatic Written by Designer on 2025-01-28
+	StrWrite $log, "_ToggleCadmatic Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	If $gCADmatic
+		StrWrite $log, "CADmatic is active, turning off", $$TIME
+		LogMessage 0, $log
+		Set $gCADmatic = $$NO
+	Else
+		StrWrite $log, "CADmatic is inactive, turning on", $$TIME
+		LogMessage 0, $log
+		Set $gCADmatic = $$YES
+	End
+ENDMACRO
+
+MACRO _ListGlobalVariables
+	# Macro _ListGlobalVariables Written by Designer on 2025-01-28
+	StrWrite $log, "_ListGlobalVariables Macro Called %s", $$TIME
+	LogMessage 0, $log
+
+	StrWrite $log, "gMacroVersion:   - %s", $gMacroVersion
+	LogMessage 0, $log
+	StrWrite $log, "gCADmatic:       - %s", $gCADmatic
+	LogMessage 0, $log
+	StrWrite $log, "gTbf:            - %s", $gTbf
+	LogMessage 0, $log
+	StrWrite $log, "gThickT:         - %s", $gThickT
+	LogMessage 0, $log
+	StrWrite $log, "gThickB:         - %s", $gThickB
+	LogMessage 0, $log
+	StrWrite $log, "gSilkT:          - %s", $gSilkT
+	LogMessage 0, $log
+	StrWrite $log, "gOrigPasteT:     - %s", $gOrigPasteT
+	LogMessage 0, $log
+	StrWrite $log, "gModPasteT:      - %s", $gModPasteT
+	LogMessage 0, $log
+	StrWrite $log, "gBorderT:        - %s", $gBorderT
+	LogMessage 0, $log
+	StrWrite $log, "gSilkB:          - %s", $gSilkB
+	LogMessage 0, $log
+	StrWrite $log, "gOrigPasteB:     - %s", $gOrigPasteB
+	LogMessage 0, $log
+	StrWrite $log, "gModPasteB:      - %s", $gModPasteB
+	LogMessage 0, $log
+	StrWrite $log, "gBorderB:        - %s", $gBorderB
+	LogMessage 0, $log
+	StrWrite $log, "gNCDrill:        - %s", $gNCDrill
+	LogMessage 0, $log
+	StrWrite $log, "gCheckPlotT:     - %s", $gCheckPlotT
+	LogMessage 0, $log
+	StrWrite $log, "gCheckPlotB:     - %s", $gCheckPlotB
+	LogMessage 0, $log
+	StrWrite $log, "gCutT:           - %s", $gCutT
+	LogMessage 0, $log
+	StrWrite $log, "gCutB:           - %s", $gCutB
+	LogMessage 0, $log
+	StrWrite $log, "gEngraveT:       - %s", $gEngraveT
+	LogMessage 0, $log
+	StrWrite $log, "gEngraveB:       - %s", $gEngraveB
+	LogMessage 0, $log
+	StrWrite $log, "gFidT:           - %s", $gFidT
+	LogMessage 0, $log
+	StrWrite $log, "gFidB:           - %s", $gFidB
+	LogMessage 0, $log
+	StrWrite $log, "gTxtT:           - %s", $gTxtT
+	LogMessage 0, $log
+	StrWrite $log, "gTxtB:           - %s", $gTxtB
+	LogMessage 0, $log
+	StrWrite $log, "gCopperT:        - %s", $gCopperT
+	LogMessage 0, $log
+	StrWrite $log, "gSolderMaskT:    - %s", $gSolderMaskT
+	LogMessage 0, $log
+	StrWrite $log, "gCopperB:        - %s", $gCopperB
+	LogMessage 0, $log
+	StrWrite $log, "gSolderMaskB:    - %s", $gSolderMaskB
+	LogMessage 0, $log
+	StrWrite $log, "gDrawing:        - %s", $gDrawing
+	LogMessage 0, $log
+	StrWrite $log, "gTxtOut20T:      - %s", $gTxtOut20T
+	LogMessage 0, $log
+	StrWrite $log, "gTxtOut20B:      - %s", $gTxtOut20B
+	LogMessage 0, $log
+	StrWrite $log, "gSizePlotT:      - %s", $gSizePlotT
+	LogMessage 0, $log
+	StrWrite $log, "gSizePlotB:      - %s", $gSizePlotB
+	LogMessage 0, $log
+	StrWrite $log, "gLMDT:           - %s", $gLMDT
+	LogMessage 0, $log
+	StrWrite $log, "gLMDB:           - %s", $gLMDB
+	LogMessage 0, $log
+	StrWrite $log, "gUntouchPasteT:  - %s", $gUntouchPasteT
+	LogMessage 0, $log
+	StrWrite $log, "gUntouchPasteB:  - %s", $gUntouchPasteB
+	LogMessage 0, $log
+	StrWrite $log, "gNSGLayerT:      - %s", $gNSGLayerT
+	LogMessage 0, $log
+	StrWrite $log, "gNSGLayerB:      - %s", $gNSGLayerB
+	LogMessage 0, $log
+	StrWrite $log, "gAlignT:         - %s", $gAlignT
+	LogMessage 0, $log
+	StrWrite $log, "gAlignB:         - %s", $gAlignB
+	LogMessage 0, $log
+	StrWrite $log, "gNCDrillB:       - %s", $gNCDrillB
+	LogMessage 0, $log
+	StrWrite $log, "gLayersPicked:   - %s", $gLayersPicked
+	LogMessage 0, $log
+	StrWrite $log, "gSavedDSN:       - %s", $gSavedDSN
+	LogMessage 0, $log
+	StrWrite $log, "gComboYesNo:     - %s", $gComboYesNo
+	LogMessage 0, $log
+	StrWrite $log, "gPasteLayers:    - %s", $gPasteLayers
+	LogMessage 0, $log
+	StrWrite $log, "gNoLib:          - %s", $gNoLib
+	LogMessage 0, $log
+	StrWrite $log, "gCropLength:     - %s", $gCropLength
+	LogMessage 0, $log
+	StrWrite $log, "gAR:             - %s", $gAR
+	LogMessage 0, $log
+	StrWrite $log, "gTwoPinEdits:    - %s", $gTwoPinEdits
+	LogMessage 0, $log
+	StrWrite $log, "gMoveTextBlock:  - %s", $gMoveTextBlock
+	LogMessage 0, $log
+	StrWrite $log, "gHasDrillLayer:  - %s", $gHasDrillLayer
+	LogMessage 0, $log
+	StrWrite $log, "gCropInOut:      - %s", $gCropInOut
+	LogMessage 0, $log
+	StrWrite $log, "gMinDim:         - %s", $gMinDim
+	LogMessage 0, $log
+	StrWrite $log, "gMinPitch:       - %s", $gMinPitch
+	LogMessage 0, $log
+	StrWrite $log, "gCustomer:       - %s", $gCustomer
+	LogMessage 0, $log
+	StrWrite $log, "gJobNumT:        - %s", $gJobNumT
+	LogMessage 0, $log
+	StrWrite $log, "gJobNumB:        - %s", $gJobNumB
+	LogMessage 0, $log
+	StrWrite $log, "gPartNumT:       - %s", $gPartNumT
+	LogMessage 0, $log
+	StrWrite $log, "gPartNumB:       - %s", $gPartNumB
+	LogMessage 0, $log
+	StrWrite $log, "gShapeSet:       - %s", $gShapeSet
+	LogMessage 0, $log
+	StrWrite $log, "gShapeSetB:      - %s", $gShapeSetB
+	LogMessage 0, $log
+	StrWrite $log, "gCPTName:        - %s", $gCPTName
+	LogMessage 0, $log
+	StrWrite $log, "gCPBName:        - %s", $gCPBName
+	LogMessage 0, $log
+	StrWrite $log, "gMatT:           - %s", $gMatT
+	LogMessage 0, $log
+	StrWrite $log, "gMatB:           - %s", $gMatB
+	LogMessage 0, $log
+	StrWrite $log, "gDir:            - %s", $gDir
+	LogMessage 0, $log
+	StrWrite $log, "gMaster:         - %s", $gMaster
+	LogMessage 0, $log
+	StrWrite $log, "gWorking:        - %s", $gWorking
+	LogMessage 0, $log
+	StrWrite $log, "gFrames:         - %s", $gFrames
+	LogMessage 0, $log
+	StrWrite $log, "gNet:            - %s", $gNet
+	LogMessage 0, $log
+	StrWrite $log, "gNetYN:          - %s", $gNetYN
+	LogMessage 0, $log
+	StrWrite $log, "gFrame:          - %s", $gFrame
+	LogMessage 0, $log
+	StrWrite $log, "gProcessT:       - %s", $gProcessT
+	LogMessage 0, $log
+	StrWrite $log, "gProcessB:       - %s", $gProcessB
+	LogMessage 0, $log
+	StrWrite $log, "gCoatT:          - %s", $gCoatT
+	LogMessage 0, $log
+	StrWrite $log, "gCoatB:          - %s", $gCoatB
+	LogMessage 0, $log
+	StrWrite $log, "gFontM:          - %s", $gFontM
+	LogMessage 0, $log
+	StrWrite $log, "gFontE:          - %s", $gFontE
+	LogMessage 0, $log
+	StrWrite $log, "gFontC:          - %s", $gFontC
+	LogMessage 0, $log
+	StrWrite $log, "gOp:             - %s", $gOp
+	LogMessage 0, $log
+	StrWrite $log, "gTextMode:       - %s", $gTextMode
+	LogMessage 0, $log
+	StrWrite $log, "gMirrorText:     - %s", $gMirrorText
+	LogMessage 0, $log
+	StrWrite $log, "gLeadFree:       - %s", $gLeadFree
+	LogMessage 0, $log
+	StrWrite $log, "gPrinterChoice:  - %s", $gPrinterChoice
+	LogMessage 0, $log
+	StrWrite $log, "gFidType:        - %s", $gFidType
+	LogMessage 0, $log
+	StrWrite $log, "gDateISO:        - %s", $gDateISO
+	LogMessage 0, $log
+
+ENDMACRO
